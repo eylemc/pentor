@@ -10,6 +10,8 @@ const DATABASE_ERRORS = [
 ];
 
 const SKIP_PATH = /(?:logout|signout|delete|remove|destroy|checkout|payment|billing|unsubscribe|admin)/i;
+const STATIC_ASSET_PATH = /\.(?:avif|bmp|css|eot|gif|ico|jpe?g|js|mjs|map|mp3|mp4|ogg|otf|pdf|png|svg|ttf|webm|webp|woff2?|zip)$/i;
+const CACHE_BUSTER_PARAMETER = /^(?:cache|cachebust|cb|h|hash|height|rev|size|t|timestamp|ts|v|ver|version|w|width)$/i;
 const LIKELY_ID = /^(?:id|uid|user(?:id)?|account(?:id)?|product(?:id)?|item(?:id)?|order(?:id)?|record(?:id)?|page)$/i;
 const LIKELY_FILTER = /^(?:id|uid|q|query|search|filter|where|sort|category|tag|name|email|username|status|type|page|limit|offset|cursor|user(?:id)?|account(?:id)?|product(?:id)?|item(?:id)?|order(?:id)?|record(?:id)?)$/i;
 const DISCOVERY_PATHS = ['/openapi.json', '/swagger.json', '/api/openapi.json'];
@@ -41,11 +43,17 @@ function sameAuthorizedOrigin(candidate, domain) {
   return candidate.protocol === 'https:' && (candidate.hostname === domain || candidate.hostname === `www.${domain}` || `www.${candidate.hostname}` === domain);
 }
 
+function isActionableCandidate(candidate) {
+  if (STATIC_ASSET_PATH.test(candidate.pathname)) return false;
+  const parameters = [...candidate.searchParams.keys()];
+  return parameters.length > 0 && !parameters.every((parameter) => CACHE_BUSTER_PARAMETER.test(parameter));
+}
+
 function addCandidate(collection, raw, base, domain) {
   try {
     const candidate = new URL(raw, base);
     candidate.hash = '';
-    if (!sameAuthorizedOrigin(candidate, domain) || SKIP_PATH.test(candidate.pathname) || !candidate.searchParams.size) return;
+    if (!sameAuthorizedOrigin(candidate, domain) || SKIP_PATH.test(candidate.pathname) || !isActionableCandidate(candidate)) return;
     const key = `${candidate.origin}${candidate.pathname}?${[...candidate.searchParams.keys()].sort().join('&')}`;
     if (!collection.has(key)) collection.set(key, candidate);
   } catch {
@@ -111,7 +119,7 @@ function openApiCandidates(document, base, domain) {
         const value = parameter.example ?? schema.example ?? schema.default ?? (schema.type === 'integer' ? '1' : 'pentor');
         url.searchParams.set(parameter.name, String(value));
       }
-      if (url.searchParams.size && sameAuthorizedOrigin(url, domain)) candidates.push(url);
+      if (sameAuthorizedOrigin(url, domain) && isActionableCandidate(url)) candidates.push(url);
     } catch {
       // Ignore malformed OpenAPI paths.
     }
@@ -305,7 +313,10 @@ export async function runDataSecurityScan({ domain, tier, safeFetch, readLimited
         }
       }
 
-      const isNoSqlEligible = LIKELY_FILTER.test(parameter) || /^\d+$/.test(original);
+      // Numeric cache-buster values are common on static/public URLs and are not
+      // evidence that the parameter reaches a NoSQL filter. Require a semantic
+      // filter/query parameter name before sending operator comparisons.
+      const isNoSqlEligible = LIKELY_FILTER.test(parameter);
       if (tier !== 'free' && isNoSqlEligible) noSqlEligible += 1;
       if (limits.noSqlChecks && noSqlChecksRun < limits.noSqlChecks && isNoSqlEligible) {
         try {

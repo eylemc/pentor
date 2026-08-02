@@ -7,30 +7,32 @@ import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
 export function ScanPage() {
-  const { pendingDomain, pendingPackage, setScanId } = useSession();
+  const { pendingDomain, pendingPackage, pendingScanScope, pendingDeepScan, setScanId } = useSession();
   const navigate = useNavigate();
   const started = useRef(false);
   const [error, setError] = useState<string | null>(null);
 
-  const testType = pendingPackage === 'advanced' ? 'Advanced Scan' : pendingPackage === 'pro' ? 'Pro Scan' : 'Free Scan';
+  const testType = pendingPackage === 'pro' ? 'Pro Scan' : 'Free Scan';
 
   useEffect(() => {
     if (!pendingDomain || started.current) return;
     started.current = true;
-    const isAdvanced = testType === 'Advanced Scan';
+    const isPro = testType === 'Pro Scan';
     api.startScan({
       domain: pendingDomain,
       testType,
-      acceptedAdvancedRisk: isAdvanced,
+      acceptedAdvancedRisk: isPro && pendingDeepScan,
       termsVersion: '1.0',
       acceptedAt: new Date().toISOString(),
+      scanScope: isPro ? pendingScanScope : undefined,
+      deepScan: isPro && pendingDeepScan,
     }).then((result) => {
       setScanId(result.scanId);
       navigate('/report', { replace: true });
     }).catch((err) => {
       setError(err instanceof Error ? err.message : 'Pentor could not start the scan.');
     });
-  }, [navigate, pendingDomain, setScanId, testType]);
+  }, [navigate, pendingDeepScan, pendingDomain, pendingScanScope, setScanId, testType]);
 
   if (!pendingDomain) return <Navigate to="/" replace />;
 

@@ -1,5 +1,5 @@
 export type Severity = 'critical' | 'high' | 'medium' | 'low' | 'passed' | 'info';
-export type FindingStatus = 'open' | 'acknowledged' | 'fixed' | 'accepted';
+export type FindingStatus = 'open' | 'acknowledged' | 'fixed' | 'accepted' | 'no_action';
 
 export interface Finding {
   id: string;

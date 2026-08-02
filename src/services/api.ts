@@ -30,6 +30,16 @@ export interface ScanConfig {
   acceptedAdvancedRisk?: boolean;
   termsVersion?: string;
   acceptedAt?: string;
+  forceRescan?: boolean;
+  scanScope?: { network: boolean; database: boolean };
+  deepScan?: boolean;
+  rlsConfig?: {
+    supabaseUrl: string;
+    anonKey: string;
+    userAToken: string;
+    userBToken: string;
+    tables: Array<{ table: string; idColumn?: string; expectedPrivate?: boolean }>;
+  };
 }
 
 export interface ScanStatusResponse {
@@ -38,9 +48,15 @@ export interface ScanStatusResponse {
   startedAt: string;
   phase: number;
   phases: string[];
+  currentPhase?: string;
+  progress?: number;
   complete: boolean;
   error?: string | null;
   log: string[];
+  cached?: boolean;
+  cachedAt?: string | null;
+  scanScope?: { network: boolean; database: boolean } | null;
+  deepScan?: boolean;
 }
 
 export interface ReportResponse {
@@ -51,13 +67,66 @@ export interface ReportResponse {
   findings: Finding[];
   summary: string;
   generatedAt: string;
+  servedFromCache?: boolean;
+  cachedAt?: string;
+  scanScope?: { network: boolean; database: boolean };
+  deepScan?: boolean;
+  isFreePreview?: boolean;
+  totalFindings?: number;
+  lockedFindingsCount?: number;
+  lockedFindings?: Array<{
+    id: string;
+    severity: 'critical' | 'high' | 'medium' | 'low';
+    section: 'network' | 'database';
+  }>;
   scanCoverage?: {
     completed: boolean;
     rawMatches: number;
     uniqueMatches: number;
     duplicatesSuppressed: number;
-    passes: { name: string; source: string; status: string; elapsedMs?: number; matches?: number }[];
+    passes: Array<{ name: string; source: 'cache' | 'live'; status: 'completed' | 'partial'; elapsedMs?: number; matches?: number }>;
     limitations: string[];
+  };
+  dataSecurityCoverage?: {
+    tier: 'free' | 'pro' | 'advanced';
+    discovered: number;
+    tested: number;
+    requests: number;
+    platforms: string[];
+    errorSignals?: number;
+    booleanSignals?: number;
+    noSqlSignals?: number;
+    quoteChecks?: number;
+    booleanChecks?: number;
+    noSqlChecks?: number;
+    noSqlEligible?: number;
+    discoveryRequests?: number;
+    openApiDocuments?: number;
+  };
+  sourceSecurityCoverage?: {
+    documentsScanned: number;
+    scriptsDiscovered: number;
+    scriptsScanned: number;
+    bytesScanned: number;
+    truncatedAssets: number;
+    secretFindings: number;
+    advisoryFindings: number;
+  };
+  toolSecurityCoverage?: {
+    profile: 'pro' | 'advanced';
+    available: boolean;
+    sqlmap: Array<{ target: string; vulnerable: boolean; timedOut: boolean; completed: boolean }>;
+    nmap: null | { completed: boolean; timedOut: boolean; openDatabaseServices: string[] };
+    restrictions: string[];
+    error?: string;
+  };
+  rlsSecurityCoverage?: {
+    provider: 'Supabase';
+    tables: number;
+    checked: number;
+    crossUserLeaks: number;
+    anonymousLeaks: number;
+    mode: 'read-only';
   };
 }
 
@@ -106,7 +175,7 @@ class ApiService {
     return apiRequest('/api/verifications/confirm-demo', { method: 'POST', body: JSON.stringify({ domain }) });
   }
 
-  async startScan(config: ScanConfig): Promise<{ ok: true; scanId: string; startedAt: string }> {
+  async startScan(config: ScanConfig): Promise<{ ok: true; scanId: string; startedAt: string; cached?: boolean; cachedAt?: string }> {
     return apiRequest('/api/scans', { method: 'POST', body: JSON.stringify(config) });
   }
 
@@ -116,6 +185,10 @@ class ApiService {
 
   async getReport(scanId: string): Promise<ReportResponse> {
     return apiRequest(`/api/scans/${encodeURIComponent(scanId)}/report`);
+  }
+
+  async cancelScan(scanId: string): Promise<{ ok: true; cancelled: true }> {
+    return apiRequest(`/api/scans/${encodeURIComponent(scanId)}/cancel`, { method: 'POST' });
   }
 
   async listDomains(): Promise<DomainSummary[]> {

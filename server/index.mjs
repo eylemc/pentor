@@ -19,8 +19,8 @@ const cacheDir = process.env.SCAN_CACHE_DIR || '/app/data/scan-cache';
 const cacheTtlMs = Number(process.env.SCAN_CACHE_TTL_MS || 24 * 60 * 60_000);
 const scannerUrl = process.env.SCANNER_URL || '';
 const scannerToken = process.env.SCANNER_TOKEN || '';
-const reportCacheVersion = 'reports-v10-client-source-security';
-const advancedCheckpointVersion = 'deep-checkpoints-v9-client-source-security';
+const reportCacheVersion = 'reports-v11-report-quality';
+const advancedCheckpointVersion = 'deep-checkpoints-v10-report-quality';
 const scanAllowlist = new Set((process.env.SCAN_ALLOWLIST || 'liqheat.com,www.liqheat.com').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean));
 
 const phases = [
@@ -366,13 +366,73 @@ async function dnsOrEmpty(fn) {
 }
 
 function recalculateReport(report, tier) {
+  const seen = new Set();
+  report.findings = report.findings.filter((item) => {
+    const key = [
+      String(item.title || '').trim().toLowerCase(),
+      String(item.category || '').trim().toLowerCase(),
+      String(item.affectedArea || '').trim().toLowerCase(),
+      String(item.severity || '').trim().toLowerCase(),
+    ].join('|');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
   const weights = { critical: 30, high: 18, medium: 8, low: 3, info: 0, passed: 0 };
-  report.score = Math.max(0, 100 - report.findings.reduce((sum, item) => sum + (weights[item.severity] || 0), 0));
+  report.score = Math.max(0, 100 - report.findings.reduce((sum, item) => {
+    if (item.status !== 'open') return sum;
+    return sum + (weights[item.severity] || 0);
+  }, 0));
   report.severityCounts = { critical: 0, high: 0, medium: 0, low: 0, passed: 0 };
   for (const item of report.findings) if (item.severity in report.severityCounts) report.severityCounts[item.severity] += 1;
   report.tier = tier;
   report.summary = `Pentor ${tier} performed ${report.findings.length} controlled checks against ${report.domain}.`;
   return report;
+}
+
+function humanReadableSummary(report, { includeNetwork, dataSecurity, toolSecurity }) {
+  const open = report.findings.filter((item) => item.status === 'open' && ['critical', 'high', 'medium', 'low'].includes(item.severity));
+  const count = (severity) => open.filter((item) => item.severity === severity).length;
+  const critical = count('critical');
+  const high = count('high');
+  const medium = count('medium');
+  const low = count('low');
+  const serious = critical + high;
+  const issueParts = [
+    critical ? `${critical} critical` : '',
+    high ? `${high} high-priority` : '',
+    medium ? `${medium} medium-priority` : '',
+    low ? `${low} low-priority` : '',
+  ].filter(Boolean);
+  const sentences = [];
+
+  if (!open.length) {
+    sentences.push('Pentor found no actionable issue within the tested public surface.');
+  } else if (!serious) {
+    sentences.push(`No critical or high-risk issue was confirmed. Pentor found ${issueParts.join(' and ')} issue${open.length === 1 ? '' : 's'} that should be reviewed.`);
+  } else {
+    sentences.push(`Pentor found ${issueParts.join(', ')} issue${open.length === 1 ? '' : 's'}. Address the critical and high-priority findings first.`);
+  }
+
+  if (dataSecurity) {
+    const builtInSignals = (dataSecurity.coverage.errorSignals || 0) + (dataSecurity.coverage.booleanSignals || 0) + (dataSecurity.coverage.noSqlSignals || 0);
+    const toolSignals = (toolSecurity?.sqlmap || []).filter((item) => item.vulnerable).length;
+    if (builtInSignals + toolSignals) {
+      sentences.push(`Database checks tested ${dataSecurity.coverage.tested || 0} public input${dataSecurity.coverage.tested === 1 ? '' : 's'} and found ${builtInSignals + toolSignals} response pattern${builtInSignals + toolSignals === 1 ? '' : 's'} requiring validation; these are potential signals, not confirmed exploitation.`);
+    } else {
+      sentences.push(`Database checks tested ${dataSecurity.coverage.tested || 0} public input${dataSecurity.coverage.tested === 1 ? '' : 's'} and found no confirmed SQL or NoSQL injection behavior.`);
+    }
+  }
+
+  const priorities = open.slice().sort((left, right) => {
+    const rank = { critical: 4, high: 3, medium: 2, low: 1 };
+    return rank[right.severity] - rank[left.severity];
+  }).map((item) => item.title).filter((title, index, all) => all.indexOf(title) === index).slice(0, 3);
+  if (priorities.length) sentences.push(`Recommended next steps: review ${priorities.join(', ')}.`);
+  if (includeNetwork && report.sourceSecurityCoverage) {
+    sentences.push(`${report.sourceSecurityCoverage.documentsScanned || 0} public client-source document${report.sourceSecurityCoverage.documentsScanned === 1 ? '' : 's'} were also checked for exposed credentials.`);
+  }
+  return sentences.join(' ');
 }
 
 async function runProScan(domain, { includeNetwork = true, includeDatabase = true } = {}) {
@@ -446,15 +506,7 @@ async function runProScan(domain, { includeNetwork = true, includeDatabase = tru
   }
   const completed = recalculateReport(report, 'Pro Scan');
   completed.scanScope = { network: includeNetwork, database: includeDatabase };
-  if (dataSecurity && toolSecurity) {
-    const confirmedInjectionSignals = (dataSecurity.coverage.errorSignals || 0) + (dataSecurity.coverage.booleanSignals || 0) + (dataSecurity.coverage.noSqlSignals || 0) +
-      (toolSecurity.sqlmap || []).filter((item) => item.vulnerable).length;
-    completed.summary = `Pentor Pro Scan reviewed ${dataSecurity.coverage.discovered} public parameterized route(s), tested ${dataSecurity.coverage.tested} selected input(s) with ${dataSecurity.coverage.quoteChecks || 0} quote checks, ${dataSecurity.coverage.booleanChecks || 0} boolean comparisons, and ${dataSecurity.coverage.noSqlChecks || 0} NoSQL operator comparisons, scanned ${report.sourceSecurityCoverage?.documentsScanned || 0} public client-source document(s), then ran independent SQL injection assessment on ${toolSecurity.sqlmap?.length || 0} route(s) and checked public database service exposure. ${confirmedInjectionSignals === 0 ? 'No confirmed injection issue was found within the tested public surface.' : 'One or more potential injection issues require review.'}`;
-  }
-  if (!dataSecurity || !toolSecurity) {
-    const selected = [includeNetwork ? 'network and application security' : '', includeDatabase ? 'database security' : ''].filter(Boolean).join(' and ');
-    completed.summary = `Pentor Pro Scan completed the selected ${selected} assessment against ${domain}.`;
-  }
+  completed.summary = humanReadableSummary(completed, { includeNetwork, dataSecurity, toolSecurity });
   return completed;
 }
 
@@ -791,8 +843,11 @@ async function runAdvancedScan(domain, onProgress = () => {}, signal, bypassCach
   const completedReport = recalculateReport(report, 'Pro Scan');
   completedReport.scanScope = scanScope;
   completedReport.deepScan = true;
-  const scopeSummary = [scanScope.network ? 'network and application security' : '', scanScope.database ? 'database security' : ''].filter(Boolean).join(' and ');
-  completedReport.summary = `Pentor Pro Scan completed the selected ${scopeSummary} assessment against ${domain}.${dataSecurity ? ` It tested ${dataSecurity.coverage.tested} public data parameter(s).` : ''}${scanScope.network ? ` Deep Scan produced ${rawMatches} raw template matches and validated ${uniqueMatches} unique vulnerability template finding${uniqueMatches === 1 ? '' : 's'}.` : ''}`;
+  completedReport.summary = humanReadableSummary(completedReport, {
+    includeNetwork: scanScope.network,
+    dataSecurity,
+    toolSecurity,
+  });
   return completedReport;
 }
 

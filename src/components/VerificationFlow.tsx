@@ -16,13 +16,16 @@ type Phase = 'select' | 'sent' | 'waiting' | 'verified' | 'expired' | 'failed';
 const adminPrefixes = ['admin', 'security', 'webmaster', 'hostmaster', 'postmaster'];
 
 export function VerificationFlow({ domain }: { domain: string }) {
-  const { setPendingPackage } = useSession();
+  const { setPendingPackage, setPendingScanScope, setPendingDeepScan } = useSession();
   const { toast } = useToast();
   const [phase, setPhase] = useState<Phase>('select');
   const [selectedEmail, setSelectedEmail] = useState<string | null>(null);
   const [authorized, setAuthorized] = useState(false);
   const [acceptedTerms, setAcceptedTerms] = useState(false);
-  const [acceptedAdvancedRisk, setAcceptedAdvancedRisk] = useState(false);
+  const [acceptedDeepRisk, setAcceptedDeepRisk] = useState(false);
+  const [checkNetwork, setCheckNetwork] = useState(true);
+  const [checkDatabase, setCheckDatabase] = useState(true);
+  const [deepScan, setDeepScan] = useState(false);
   const [sending, setSending] = useState(false);
   const [verifying, setVerifying] = useState(false);
   const [cooldown, setCooldown] = useState(0);
@@ -48,8 +51,8 @@ export function VerificationFlow({ domain }: { domain: string }) {
       setTimeout(() => setPhase('waiting'), 1500);
       setCooldown(30);
       toast(`Verification link sent to ${target}.`, 'success');
-    } catch {
-      toast('Could not send verification email. Try again.', 'error');
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Could not create the verification request. Try again.', 'error');
     } finally {
       setSending(false);
     }
@@ -75,6 +78,8 @@ export function VerificationFlow({ domain }: { domain: string }) {
       await api.requestDomainVerification({ domain, email, authorized, acceptedTerms, termsVersion: '1.0', acceptedAt: new Date().toISOString() });
       setCooldown(30);
       toast('Verification link resent.', 'info');
+    } catch (error) {
+      toast(error instanceof Error ? error.message : 'Could not recreate the verification request.', 'error');
     } finally {
       setSending(false);
     }
@@ -152,43 +157,64 @@ export function VerificationFlow({ domain }: { domain: string }) {
               <CheckCircle2 className="w-12 h-12 text-accent-400 mx-auto mb-4" />
               <h2 className="text-lg font-semibold text-gray-100">Authorization verified</h2>
               <p className="text-sm text-gray-500 mt-1 mb-6">Your domain is authorized. Redirecting to your security test...</p>
-              <label className="flex items-start gap-3 text-left rounded-lg border border-warn-500/25 bg-warn-500/5 p-4 mb-4 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={acceptedAdvancedRisk}
-                  onChange={(e) => setAcceptedAdvancedRisk(e.target.checked)}
-                  className="mt-0.5 w-4 h-4 rounded border-ink-600 bg-ink-900 text-accent-500 focus:ring-accent-500/40"
-                />
-                <span className="text-xs text-gray-400 leading-relaxed">
-                  <strong className="block text-gray-200 mb-1">Required for Advanced Scan</strong>
-                  I specifically authorize Pentor to perform the Advanced Scan against {domain}. I confirm the target is within my authorized scope, acknowledge that security testing may cause alerts, blocking, charges, degraded performance, interruption, or data loss, and accept Sections 3–5, 15, and 16 of the <Link to="/terms" className="text-accent-400 hover:underline">Terms of Service</Link>.
-                </span>
-              </label>
-              <div className="grid sm:grid-cols-3 gap-2.5">
+              <div className="rounded-lg border border-ink-700 bg-ink-900/50 p-4 mb-4 text-left">
+                <p className="text-sm font-semibold text-gray-200">Pro Scan options</p>
+                <p className="text-xs text-gray-500 mt-1 mb-3">Free Preview runs both standard areas automatically. Pro unlocks every finding and lets you add the optional Deep Scan.</p>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <label className="flex items-start gap-3 rounded-lg border border-ink-700 p-3 cursor-pointer hover:border-ink-600">
+                    <input type="checkbox" checked={checkNetwork} onChange={(event) => { setCheckNetwork(event.target.checked); if (!event.target.checked) setDeepScan(false); }} className="mt-0.5 w-4 h-4 rounded border-ink-600 bg-ink-900 text-accent-500" />
+                    <span><strong className="block text-sm text-gray-200">Network & App Security</strong><span className="text-xs text-gray-500">TLS, DNS, headers, exposure and platform checks.</span></span>
+                  </label>
+                  <label className="flex items-start gap-3 rounded-lg border border-ink-700 p-3 cursor-pointer hover:border-ink-600">
+                    <input type="checkbox" checked={checkDatabase} onChange={(event) => setCheckDatabase(event.target.checked)} className="mt-0.5 w-4 h-4 rounded border-ink-600 bg-ink-900 text-accent-500" />
+                    <span><strong className="block text-sm text-gray-200">Database Security</strong><span className="text-xs text-gray-500">SQL/NoSQL injection behavior, database exposure and optional RLS checks.</span></span>
+                  </label>
+                </div>
+                <label className={`mt-3 flex items-start gap-3 rounded-lg border p-3 ${checkNetwork ? 'border-cyber-500/30 bg-cyber-500/5 cursor-pointer' : 'border-ink-700 opacity-50 cursor-not-allowed'}`}>
+                  <input type="checkbox" checked={deepScan} disabled={!checkNetwork} onChange={(event) => setDeepScan(event.target.checked)} className="mt-0.5 w-4 h-4 rounded border-ink-600 bg-ink-900 text-cyber-500" />
+                  <span><strong className="block text-sm text-gray-200">Deep Vulnerability Scan</strong><span className="text-xs text-gray-500">Runs expanded safe vulnerability templates against detected technologies. Adds approximately 3–12 minutes.</span></span>
+                </label>
+              </div>
+              {deepScan && (
+                <label className="flex items-start gap-3 text-left rounded-lg border border-warn-500/25 bg-warn-500/5 p-4 mb-4 cursor-pointer">
+                  <input type="checkbox" checked={acceptedDeepRisk} onChange={(event) => setAcceptedDeepRisk(event.target.checked)} className="mt-0.5 w-4 h-4 rounded border-ink-600 bg-ink-900 text-accent-500 focus:ring-accent-500/40" />
+                  <span className="text-xs text-gray-400 leading-relaxed">
+                    <strong className="block text-gray-200 mb-1">Required for Deep Vulnerability Scan</strong>
+                    I specifically authorize expanded vulnerability testing against {domain}, acknowledge that testing may cause alerts, blocking, charges, degraded performance, interruption, or data loss, and accept Sections 3–5, 15, and 16 of the <Link to="/terms" className="text-accent-400 hover:underline">Terms of Service</Link>.
+                  </span>
+                </label>
+              )}
+              <div className="grid sm:grid-cols-2 gap-2.5">
                 {[
-                  ['free', 'Free Scan'],
-                  ['pro', 'Test Pro Scan'],
-                  ['advanced', 'Test Advanced'],
+                  ['free', 'Run Free Preview'],
+                  ['pro', deepScan ? 'Run Pro + Deep Scan' : 'Run Pro Scan'],
                 ].map(([tier, label]) => (
                   <Link
                     key={tier}
                     to="/scan"
                     onClick={(event) => {
-                      if (tier === 'advanced' && !acceptedAdvancedRisk) {
+                      if (tier === 'pro' && deepScan && !acceptedDeepRisk) {
                         event.preventDefault();
-                        toast('Accept the Advanced Scan authorization and risk notice first.', 'error');
+                        toast('Accept the Deep Scan authorization and risk notice first.', 'error');
+                        return;
+                      }
+                      if (tier === 'pro' && !checkNetwork && !checkDatabase) {
+                        event.preventDefault();
+                        toast('Select Network & App Security, Database Security, or both.', 'error');
                         return;
                       }
                       setPendingPackage(tier);
+                      setPendingScanScope({ network: checkNetwork, database: checkDatabase });
+                      setPendingDeepScan(tier === 'pro' && deepScan);
                     }}
-                    aria-disabled={tier === 'advanced' && !acceptedAdvancedRisk}
-                    className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors ${tier === 'advanced' && !acceptedAdvancedRisk ? 'bg-ink-700 text-gray-500 cursor-not-allowed' : 'bg-accent-500 text-ink-950 hover:bg-accent-400'}`}
+                    aria-disabled={tier === 'pro' && deepScan && !acceptedDeepRisk}
+                    className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-sm font-semibold rounded-lg transition-colors ${tier === 'pro' && deepScan && !acceptedDeepRisk ? 'bg-ink-700 text-gray-500 cursor-not-allowed' : 'bg-accent-500 text-ink-950 hover:bg-accent-400'}`}
                   >
                     {label} <ArrowRight className="w-4 h-4" />
                   </Link>
                 ))}
               </div>
-              <p className="text-xs text-gray-600 mt-3">Test mode: paid tiers are temporarily available only for the authorized LiqHeat allowlist.</p>
+              <p className="text-xs text-gray-600 mt-3">Demo mode: Pro is available only for authorized allowlisted domains.</p>
             </div>
           )}
         </div>

@@ -1,0 +1,21 @@
+95-179-169-114.sslip.io {
+    encode zstd gzip
+
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    handle {
+        reverse_proxy web:80
+    }
+}
+
+http://95.179.169.114 {
+    handle /api/* {
+        reverse_proxy api:3000
+    }
+
+    handle {
+        reverse_proxy web:80
+    }
+}

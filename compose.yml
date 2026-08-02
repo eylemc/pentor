@@ -1,0 +1,70 @@
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: pentor-web
+    restart: unless-stopped
+    networks:
+      - pentor
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  api:
+    build:
+      context: ./server
+      dockerfile: Dockerfile
+    container_name: pentor-api
+    restart: unless-stopped
+    environment:
+      PORT: "3000"
+      CORS_ORIGINS: ""
+      SCAN_ALLOWLIST: "liqheat.com,www.liqheat.com"
+      SCAN_CACHE_DIR: "/app/data/scan-cache"
+      SCAN_CACHE_TTL_MS: "86400000"
+    volumes:
+      - nuclei_templates:/home/node/nuclei-templates
+      - scan_cache:/app/data
+    networks:
+      - pentor
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  gateway:
+    image: caddy:2.10-alpine
+    container_name: pentor-gateway
+    restart: unless-stopped
+    depends_on:
+      - web
+      - api
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./ops/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    networks:
+      - pentor
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  pentor:
+    name: pentor
+
+volumes:
+  caddy_data:
+  caddy_config:
+  nuclei_templates:
+  scan_cache:

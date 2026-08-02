@@ -368,13 +368,6 @@ export async function runDataSecurityScan({ domain, tier, safeFetch, readLimited
       'No public NoSQL operator-injection signal was confirmed within the observed surface.',
       'Continue rejecting user-controlled query operators and enforce server-side filter schemas.', 'Data and injection security', true));
   }
-  if (!candidates.length) {
-    findings.push(makeFinding('DATA-SCOPE-002', 'No public parameterized routes discovered', 'info', domain,
-      'The public landing page did not expose same-origin GET routes with query parameters. Pentor did not guess or brute-force hidden application routes.',
-      'Client-side, authenticated, or undocumented APIs may still expose data inputs.',
-      'Provide an OpenAPI document or authenticated test account for deeper Pro coverage.', 'Data and injection security'));
-  }
-
   return finalize(findings, {
     tier, discovered: discovered.length, tested: parametersTested, requests, platforms, errorSignals, booleanSignals, noSqlSignals,
     quoteChecks: quoteChecksRun, booleanChecks: booleanChecksRun, noSqlChecks: noSqlChecksRun, noSqlEligible,

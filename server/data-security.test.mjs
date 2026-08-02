@@ -90,3 +90,11 @@ test('Pro scan excludes versioned static assets from database input discovery', 
   assert.equal(result.coverage.noSqlChecks, 1);
   assert.equal(result.coverage.noSqlSignals, 0);
 });
+
+test('No discovered public input remains coverage metadata, not an open finding', async () => {
+  const safeFetch = async () => new Response('<main>No parameterized routes</main>');
+  const result = await runDataSecurityScan({ domain: 'example.com', tier: 'pro', safeFetch, readLimitedText, makeFinding });
+  assert.equal(result.coverage.discovered, 0);
+  assert.equal(result.coverage.tested, 0);
+  assert.ok(!result.findings.some((item) => item.id === 'DATA-SCOPE-002'));
+});

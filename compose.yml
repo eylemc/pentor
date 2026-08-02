@@ -25,9 +25,41 @@ services:
       SCAN_ALLOWLIST: "liqheat.com,www.liqheat.com"
       SCAN_CACHE_DIR: "/app/data/scan-cache"
       SCAN_CACHE_TTL_MS: "86400000"
+      SCANNER_URL: "http://scanner:3100"
+      SCANNER_TOKEN: "${SCANNER_TOKEN:-change-me-before-public-launch}"
     volumes:
       - nuclei_templates:/home/node/nuclei-templates
       - scan_cache:/app/data
+    networks:
+      - pentor
+    depends_on:
+      - scanner
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+  scanner:
+    build:
+      context: ./server
+      dockerfile: Scanner.Dockerfile
+    container_name: pentor-scanner
+    restart: unless-stopped
+    environment:
+      PORT: "3100"
+      SCAN_ALLOWLIST: "liqheat.com,www.liqheat.com"
+      SCANNER_TOKEN: "${SCANNER_TOKEN:-change-me-before-public-launch}"
+    read_only: true
+    tmpfs:
+      - /tmp:size=128m,mode=1777
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 96
+    mem_limit: 512m
+    cpus: 0.75
     networks:
       - pentor
     logging:

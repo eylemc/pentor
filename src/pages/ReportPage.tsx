@@ -1,15 +1,15 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Download, RefreshCw, ArrowUpCircle, UserSearch, ShieldCheck, AlertTriangle, CheckCircle2,
-  Radar, Clock3, Activity, LockKeyhole,
+  Radar, Clock3, Activity, LockKeyhole, Database,
 } from 'lucide-react';
 import { SecurityScore } from '@/components/SecurityScore';
 import { FindingsTable } from '@/components/FindingsTable';
 import { SeverityBadge } from '@/components/ui/Badge';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button, LinkButton } from '@/components/ui/Button';
-import { findings, securityScore, severityCounts, sampleReportSummary } from '@/data/findings';
+import { findings, securityScore, severityCounts, sampleReportSummary, type Finding } from '@/data/findings';
 import { useToast } from '@/components/ui/Toast';
 import { api, type ReportResponse, type ScanStatusResponse } from '@/services/api';
 import { useSession } from '@/components/ui/Session';
@@ -30,10 +30,12 @@ export function ReportPage() {
     if (!report || restarting) return;
     setRestarting(true);
     try {
-      const isAdvanced = report.tier?.toLowerCase().includes('advanced');
+      const isDeep = Boolean(report.deepScan || report.tier?.toLowerCase().includes('advanced'));
       const result = await api.startScan({
         domain: report.domain, testType: report.tier ?? 'Free Scan', forceRescan: true,
-        acceptedAdvancedRisk: isAdvanced, termsVersion: '1.0', acceptedAt: new Date().toISOString(),
+        acceptedAdvancedRisk: isDeep, termsVersion: '1.0', acceptedAt: new Date().toISOString(),
+        scanScope: report.tier?.toLowerCase().includes('pro') || isDeep ? (report.scanScope ?? { network: true, database: true }) : undefined,
+        deepScan: isDeep,
       });
       setScanId(result.scanId);
       setReport(null);
@@ -120,6 +122,12 @@ export function ReportPage() {
   const activeScore = report?.score ?? securityScore;
   const activeCounts = report?.severityCounts ?? severityCounts;
   const activeSummary = report?.summary ?? sampleReportSummary.riskSummary;
+  const isFreePreview = Boolean(report?.isFreePreview);
+  const lockedFindings = report?.lockedFindings ?? [];
+  const databaseFindings = activeFindings.filter(isDatabaseFinding);
+  const networkFindings = activeFindings.filter((finding) => !isDatabaseFinding(finding));
+  const lockedDatabaseFindings = lockedFindings.filter((finding) => finding.section === 'database');
+  const lockedNetworkFindings = lockedFindings.filter((finding) => finding.section === 'network');
 
   if (loading) {
     return (
@@ -146,17 +154,19 @@ export function ReportPage() {
           {report?.servedFromCache && <p className="text-xs text-cyber-400 mt-1">Instant cached report · run a fresh scan whenever you need current results.</p>}
         </div>
         <div className="flex flex-wrap gap-2.5">
-          <Button variant="secondary" size="sm" onClick={downloadReport} disabled={!report || downloading}>
-            <Download className="w-4 h-4" />
-            {downloading ? 'Generating PDF…' : 'Download Report'}
-          </Button>
+          {!isFreePreview && (
+            <Button variant="secondary" size="sm" onClick={downloadReport} disabled={!report || downloading}>
+              <Download className="w-4 h-4" />
+              {downloading ? 'Generating PDF…' : 'Download Report'}
+            </Button>
+          )}
           <Button variant="secondary" size="sm" onClick={runFreshScan} disabled={restarting}>
             <RefreshCw className="w-4 h-4" />
             {restarting ? 'Starting…' : 'Run Fresh Scan'}
           </Button>
-          <LinkButton to="/checkout/advanced" variant="outline" size="sm">
+          <LinkButton to={isFreePreview ? '/checkout/pro' : '/checkout/domain-credit'} variant="outline" size="sm">
             <ArrowUpCircle className="w-4 h-4" />
-            Upgrade Test
+            {isFreePreview ? 'Unlock Full Report — $19.90' : 'Add Domain — $5'}
           </LinkButton>
           <LinkButton to="/human-pentest" variant="primary" size="sm">
             <UserSearch className="w-4 h-4" />
@@ -188,7 +198,7 @@ export function ReportPage() {
       {report?.scanCoverage && (
         <Card className="mb-8">
           <CardHeader
-            title="Advanced scan coverage"
+            title="Deep Scan coverage"
             subtitle={`${report.scanCoverage.rawMatches} raw matches · ${report.scanCoverage.uniqueMatches} unique findings · ${report.scanCoverage.duplicatesSuppressed} duplicates suppressed`}
             icon={<ShieldCheck className="w-5 h-5" />}
           />
@@ -217,40 +227,25 @@ export function ReportPage() {
         </Card>
       )}
 
-      {/* Severity distribution */}
-      <Card className="mb-8">
-        <CardHeader title="Severity distribution" subtitle="How findings break down by severity" icon={<AlertTriangle className="w-5 h-5" />} />
-        <CardBody>
-          <div className="space-y-3">
-            {(['critical', 'high', 'medium', 'low', 'passed'] as const).map((sev) => {
-              const count = activeCounts[sev];
-              const total = Object.values(activeCounts).reduce<number>((a, b) => a + b, 0);
-              const pct = total > 0 ? (count / total) * 100 : 0;
-              const colors: Record<string, string> = {
-                critical: 'bg-danger-500', high: 'bg-warn-500', medium: 'bg-accent-500', low: 'bg-cyber-500', passed: 'bg-accent-600',
-              };
-              return (
-                <div key={sev} className="flex items-center gap-4">
-                  <div className="w-20 shrink-0">
-                    <SeverityBadge severity={sev} />
-                  </div>
-                  <div className="flex-1 h-2.5 rounded-full bg-ink-800 overflow-hidden">
-                    <div className={`h-full rounded-full ${colors[sev]} transition-all duration-700`} style={{ width: `${pct}%` }} />
-                  </div>
-                  <span className="text-sm text-gray-400 w-8 text-right">{count}</span>
-                </div>
-              );
-            })}
-          </div>
-        </CardBody>
-      </Card>
+      <SecurityFindingsSection
+        title="Network Security"
+        subtitle={report?.sourceSecurityCoverage
+          ? `TLS, DNS, headers and exposed services · ${report.sourceSecurityCoverage.documentsScanned} client-source documents · ${report.sourceSecurityCoverage.scriptsScanned} JavaScript assets · ${report.sourceSecurityCoverage.secretFindings} exposed secrets.`
+          : 'TLS, DNS, HTTP headers, exposed services, email security, and the public web surface.'}
+        findings={networkFindings}
+        lockedFindings={lockedNetworkFindings}
+        icon={<ShieldCheck className="w-5 h-5" />}
+      />
 
-      {/* Findings */}
-      <div className="mb-4">
-        <h2 className="text-xl font-semibold text-gray-100 mb-1">Findings</h2>
-        <p className="text-sm text-gray-500 mb-5">Click any finding to see full details, impact, and recommended fixes.</p>
-      </div>
-      <FindingsTable findings={activeFindings} />
+      <SecurityFindingsSection
+        title="Database Security"
+        subtitle={report?.dataSecurityCoverage
+          ? `${report.dataSecurityCoverage.tested} inputs · ${report.dataSecurityCoverage.quoteChecks ?? 0} quote checks · ${report.dataSecurityCoverage.booleanChecks ?? 0} boolean checks · ${report.dataSecurityCoverage.noSqlChecks ?? 0} NoSQL checks${(report.dataSecurityCoverage.noSqlChecks ?? 0) === 0 ? ` (${report.dataSecurityCoverage.noSqlEligible ?? 0} eligible public filter inputs)` : ''} · ${report.dataSecurityCoverage.requests} total requests.`
+          : 'Database error exposure, SQL and NoSQL injection behavior, public database services, and row-level access controls.'}
+        findings={databaseFindings}
+        lockedFindings={lockedDatabaseFindings}
+        icon={<Database className="w-5 h-5" />}
+      />
 
       <div className="mt-10 rounded-lg border border-accent-500/20 bg-accent-500/5 p-4 flex items-start gap-3">
         <ShieldCheck className="w-5 h-5 text-accent-400 shrink-0 mt-0.5" />
@@ -262,18 +257,69 @@ export function ReportPage() {
   );
 }
 
+const sectionSeverities = ['critical', 'high', 'medium', 'low', 'passed'] as const;
+const sectionColors: Record<(typeof sectionSeverities)[number], string> = {
+  critical: 'bg-danger-500', high: 'bg-warn-500', medium: 'bg-accent-500', low: 'bg-cyber-500', passed: 'bg-accent-600',
+};
+
+function isDatabaseFinding(finding: Finding) {
+  return /^(?:DATA|INJ|TOOL|RLS)-/i.test(finding.id) ||
+    /database|injection|row-level security|public database/i.test(finding.category);
+}
+
+function SecurityFindingsSection({ title, subtitle, findings: sectionFindings, lockedFindings: sectionLockedFindings, icon }: {
+  title: string;
+  subtitle: string;
+  findings: Finding[];
+  lockedFindings: Array<{ id: string; severity: 'critical' | 'high' | 'medium' | 'low'; section: 'network' | 'database' }>;
+  icon: ReactNode;
+}) {
+  const counts = Object.fromEntries(sectionSeverities.map((severity) => [
+    severity, sectionFindings.filter((finding) => finding.severity === severity).length + sectionLockedFindings.filter((finding) => finding.severity === severity).length,
+  ])) as Record<(typeof sectionSeverities)[number], number>;
+  const total = Object.values(counts).reduce((sum, count) => sum + count, 0);
+
+  return (
+    <section className="mb-12">
+      <Card className="mb-7">
+        <CardHeader title={title} subtitle={subtitle} icon={icon} />
+        <CardBody>
+          <div className="space-y-3">
+            {sectionSeverities.map((severity) => {
+              const percentage = total > 0 ? (counts[severity] / total) * 100 : 0;
+              return (
+                <div key={severity} className="flex items-center gap-4">
+                  <div className="w-20 shrink-0"><SeverityBadge severity={severity} /></div>
+                  <div className="flex-1 h-2.5 rounded-full bg-ink-800 overflow-hidden">
+                    <div className={`h-full rounded-full ${sectionColors[severity]} transition-all duration-700`} style={{ width: `${percentage}%` }} />
+                  </div>
+                  <span className="text-sm text-gray-400 w-8 text-right">{counts[severity]}</span>
+                </div>
+              );
+            })}
+          </div>
+        </CardBody>
+      </Card>
+
+      <div className="mb-5">
+        <h2 className="text-xl font-semibold text-gray-100 mb-1">{title} findings</h2>
+        <p className="text-sm text-gray-500">Click any finding to see the evidence, business impact, and recommended fix.</p>
+      </div>
+      <FindingsTable findings={sectionFindings} lockedFindings={sectionLockedFindings} />
+    </section>
+  );
+}
+
 function ScanWaiting({ status, elapsedSeconds, onCancel }: { status: ScanStatusResponse | null; elapsedSeconds: number; onCancel: () => void }) {
-  const rawType = (status?.testType ?? 'advanced').toLowerCase();
-  const type = rawType.includes('advanced') ? 'advanced' : rawType.includes('pro') ? 'pro' : 'free';
-  const tier = type === 'advanced' ? 'Advanced Scan' : type === 'pro' ? 'Pro Scan' : 'Free Scan';
-  const estimate = type === 'advanced' ? '3–12 minutes' : type === 'pro' ? '30–90 seconds' : 'Under 30 seconds';
-  const targetSeconds = type === 'advanced' ? 420 : type === 'pro' ? 60 : 25;
+  const rawType = (status?.testType ?? 'free').toLowerCase();
+  const type = status?.deepScan || rawType.includes('deep') || rawType.includes('advanced') ? 'deep' : rawType.includes('pro') ? 'pro' : 'free';
+  const tier = type === 'deep' ? 'Pro Deep Scan' : type === 'pro' ? 'Pro Scan' : 'Free Scan';
+  const estimate = type === 'deep' ? '3–12 minutes' : '30–90 seconds';
+  const targetSeconds = type === 'deep' ? 420 : 60;
   const estimatedProgress = Math.min(92, Math.max(6, Math.round(6 + (elapsedSeconds / targetSeconds) * 86)));
-  const stages = type === 'advanced'
+  const stages = type === 'deep'
     ? ['Preparing authorized target', 'Running baseline security checks', 'Fingerprinting platform and DNS', 'Running safe vulnerability templates', 'Validating and prioritizing findings', 'Building your report']
-    : type === 'pro'
-      ? ['Preparing authorized target', 'Running baseline security checks', 'Fingerprinting platform and DNS', 'Checking email and DNS security', 'Validating and prioritizing findings', 'Building your report']
-      : ['Preparing authorized target', 'Checking TLS and HTTP security', 'Reviewing public security signals', 'Validating findings', 'Building your report'];
+    : ['Preparing authorized target', 'Running baseline security checks', 'Fingerprinting platform and DNS', 'Checking network and database security', 'Validating and prioritizing findings', 'Building your report'];
   const currentPhase = status?.currentPhase ?? stages[0];
   const normalizedPhase = currentPhase.toLowerCase();
   const activeStage = normalizedPhase.includes('report') ? stages.length - 1

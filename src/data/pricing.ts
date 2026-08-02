@@ -1,7 +1,7 @@
 export type BillingType = 'one-time' | 'monthly' | 'free';
 
 export interface PricingPlan {
-  id: 'free' | 'limited' | 'advanced' | 'monitoring' | 'human';
+  id: 'free' | 'pro' | 'domain-credit' | 'monitoring' | 'human';
   name: string;
   price: number;
   priceLabel: string;
@@ -13,64 +13,52 @@ export interface PricingPlan {
   ctaTo: string;
   popular?: boolean;
   badge?: string;
+  domainCredits?: number;
 }
 
 export const pricingPlans: PricingPlan[] = [
   {
     id: 'free',
-    name: 'Free Test',
+    name: 'Free Scan',
     price: 0,
     priceLabel: '$0',
     billing: 'free',
     billingNote: 'No credit card required',
-    description: 'A basic security snapshot to see where you stand today.',
+    description: 'Run the same fast standard checks as Pro and preview the most important findings.',
     features: [
-      'Basic security snapshot',
-      'Limited safe checks',
+      'Pro-standard network & app checks',
+      'Pro-standard database checks',
+      'Passed checks fully visible',
+      'Top security findings preview',
+      'Additional findings blurred',
       'Email authorization',
-      'Summary results',
       'No credit card required',
     ],
     cta: 'Start Free',
     ctaTo: '/',
   },
   {
-    id: 'limited',
+    id: 'pro',
     name: 'Pro Scan',
-    price: 9.99,
-    priceLabel: '$9.99',
+    price: 19.90,
+    priceLabel: '$19.90',
     billing: 'one-time',
-    billingNote: 'One-time payment',
-    description: 'Expanded automated checks with risk prioritization.',
+    billingNote: 'One-time payment · includes 3 domain credits',
+    description: 'One professional assessment with flexible depth and no confusing tiers.',
     features: [
-      'Expanded automated checks',
-      'More detailed findings',
-      'Risk prioritization',
-      'Fix recommendations',
-      'Downloadable report',
+      '3 verified domain credits',
+      'Network & application security',
+      'SQL, NoSQL & database exposure checks',
+      'Optional Deep Vulnerability Scan',
+      'Step-by-step remediation guidance',
+      'Professional PDF report',
+      'Additional domains only $5 each',
     ],
-    cta: 'Run Pro Scan',
-    ctaTo: '/checkout/limited',
-  },
-  {
-    id: 'advanced',
-    name: 'Advanced Test',
-    price: 29.99,
-    priceLabel: '$29.99',
-    billing: 'one-time',
-    billingNote: 'One-time payment',
-    description: 'Deeper automated assessment with AI-assisted analysis.',
-    features: [
-      'Deeper automated assessment',
-      'Broader application checks',
-      'AI-assisted finding analysis',
-      'Detailed remediation guidance',
-      'Downloadable professional report',
-    ],
-    cta: 'Run Advanced Test',
-    ctaTo: '/checkout/advanced',
+    cta: 'Get Pro — 3 Domains',
+    ctaTo: '/checkout/pro',
     popular: true,
-    badge: 'Most Popular',
+    badge: 'Best Value',
+    domainCredits: 3,
   },
   {
     id: 'monitoring',
@@ -110,6 +98,27 @@ export const pricingPlans: PricingPlan[] = [
   },
 ];
 
+export const domainCreditPlan: PricingPlan = {
+  id: 'domain-credit',
+  name: 'Additional Domain Credit',
+  price: 5,
+  priceLabel: '$5',
+  billing: 'one-time',
+  billingNote: 'One-time payment · never expires until used',
+  description: 'Add another verified domain to your Pro security workspace.',
+  features: [
+    '1 additional domain credit',
+    'Network & application security',
+    'Database & injection security',
+    'Optional Deep Vulnerability Scan',
+    'Professional PDF report',
+  ],
+  cta: 'Buy Domain Credit',
+  ctaTo: '/checkout/domain-credit',
+  domainCredits: 1,
+};
+
 export function getPlan(id: string): PricingPlan | undefined {
-  return pricingPlans.find((p) => p.id === id);
+  if (id === 'limited' || id === 'advanced') return pricingPlans.find((plan) => plan.id === 'pro');
+  return id === 'domain-credit' ? domainCreditPlan : pricingPlans.find((plan) => plan.id === id);
 }

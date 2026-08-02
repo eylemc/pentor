@@ -19,8 +19,8 @@ const cacheDir = process.env.SCAN_CACHE_DIR || '/app/data/scan-cache';
 const cacheTtlMs = Number(process.env.SCAN_CACHE_TTL_MS || 24 * 60 * 60_000);
 const scannerUrl = process.env.SCANNER_URL || '';
 const scannerToken = process.env.SCANNER_TOKEN || '';
-const reportCacheVersion = 'reports-v11-report-quality';
-const advancedCheckpointVersion = 'deep-checkpoints-v10-report-quality';
+const reportCacheVersion = 'reports-v12-clean-coverage';
+const advancedCheckpointVersion = 'deep-checkpoints-v11-clean-coverage';
 const scanAllowlist = new Set((process.env.SCAN_ALLOWLIST || 'liqheat.com,www.liqheat.com').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean));
 
 const phases = [

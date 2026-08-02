@@ -46,6 +46,28 @@ const lockedAccentClasses: Record<LockedFindingPreview['severity'], { border: st
   low: { border: 'border-l-cyber-500', icon: 'text-cyber-400', glow: 'bg-cyber-500/15' },
 };
 
+const safeLockedHints: Record<LockedFindingPreview['section'], Array<{ title: string; text: string }>> = {
+  network: [
+    { title: 'Browser security control requires review', text: 'A browser-facing protection appears missing or incomplete on the public web surface.' },
+    { title: 'Domain trust configuration requires review', text: 'A public domain or email-security control may not be fully configured.' },
+    { title: 'Transport protection signal detected', text: 'An HTTPS, TLS, or secure-transport setting requires closer validation.' },
+    { title: 'Public information exposure detected', text: 'The public response may reveal more technical information than necessary.' },
+    { title: 'Session protection control requires review', text: 'A browser session or cookie-related safeguard may need additional hardening.' },
+  ],
+  database: [
+    { title: 'Public data-access control requires review', text: 'A public data path produced a security signal that should be validated in the full report.' },
+    { title: 'Input handling signal detected', text: 'A public input or query behavior requires closer database-security review.' },
+    { title: 'Database exposure control requires review', text: 'A public-facing database or service boundary may need additional restriction.' },
+    { title: 'Access isolation signal detected', text: 'A data-access boundary requires further validation before it can be considered secure.' },
+    { title: 'Application data protection requires review', text: 'A public application-to-data interaction produced a security-relevant signal.' },
+  ],
+};
+
+function getSafeLockedHint(finding: LockedFindingPreview, index: number) {
+  const hints = safeLockedHints[finding.section];
+  return hints[index % hints.length];
+}
+
 export function FindingsTable({ findings, lockedFindings = [] }: { findings: Finding[]; lockedFindings?: LockedFindingPreview[] }) {
   const [search, setSearch] = useState('');
   const [severity, setSeverity] = useState<Severity | 'all'>('all');
@@ -93,34 +115,15 @@ export function FindingsTable({ findings, lockedFindings = [] }: { findings: Fin
           />
         </div>
         <div className="flex gap-2">
-          <select
-            value={severity}
-            onChange={(e) => setSeverity(e.target.value as Severity | 'all')}
-            className="input-base cursor-pointer"
-            aria-label="Filter by severity"
-          >
-            {severityFilters.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
+          <select value={severity} onChange={(e) => setSeverity(e.target.value as Severity | 'all')} className="input-base cursor-pointer" aria-label="Filter by severity">
+            {severityFilters.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
           </select>
-          <select
-            value={status}
-            onChange={(e) => setStatus(e.target.value as FindingStatus | 'all')}
-            className="input-base cursor-pointer"
-            aria-label="Filter by status"
-          >
-            {statusFilters.map((f) => (
-              <option key={f.value} value={f.value}>{f.label}</option>
-            ))}
+          <select value={status} onChange={(e) => setStatus(e.target.value as FindingStatus | 'all')} className="input-base cursor-pointer" aria-label="Filter by status">
+            {statusFilters.map((f) => <option key={f.value} value={f.value}>{f.label}</option>)}
           </select>
           <div className="relative">
             <ArrowUpDown className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-500 pointer-events-none" />
-            <select
-              value={sort}
-              onChange={(e) => setSort(e.target.value as SortKey)}
-              className="input-base pl-9 cursor-pointer"
-              aria-label="Sort findings"
-            >
+            <select value={sort} onChange={(e) => setSort(e.target.value as SortKey)} className="input-base pl-9 cursor-pointer" aria-label="Sort findings">
               <option value="severity">Severity</option>
               <option value="date">Date</option>
               <option value="status">Status</option>
@@ -136,34 +139,28 @@ export function FindingsTable({ findings, lockedFindings = [] }: { findings: Fin
 
       <div className={cn('space-y-3')}>
         {filtered.length === 0 ? (
-          <div className="surface p-8 text-center">
-            <p className="text-sm text-gray-500">No findings match your filters.</p>
-          </div>
-        ) : (
-          filtered.map((f) => <FindingCard key={f.id} finding={f} />)
-        )}
+          <div className="surface p-8 text-center"><p className="text-sm text-gray-500">No findings match your filters.</p></div>
+        ) : filtered.map((f) => <FindingCard key={f.id} finding={f} />)}
       </div>
 
       {filteredLocked.length > 0 && (
         <div className="space-y-3 pt-1">
           <div className="rounded-lg border border-accent-500/30 bg-accent-500/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_28px_rgba(16,185,129,0.06)]">
             <div className="flex items-center gap-3">
-              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-500/30 bg-accent-500/10">
-                <LockKeyhole className="w-5 h-5 text-accent-400" />
-              </div>
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-500/30 bg-accent-500/10"><LockKeyhole className="w-5 h-5 text-accent-400" /></div>
               <div>
                 <p className="text-sm font-semibold text-gray-100">{filteredLocked.length} additional security {filteredLocked.length === 1 ? 'finding' : 'findings'} detected</p>
                 <p className="text-xs text-gray-500 mt-0.5">Unlock every vulnerability, technical evidence, remediation step, and the complete security report.</p>
               </div>
             </div>
             <Link to="/checkout/pro" className="inline-flex items-center justify-center gap-2 rounded-md bg-accent-500 px-5 py-2.5 text-sm font-bold text-ink-950 hover:bg-accent-400 transition-colors whitespace-nowrap">
-              <LockKeyhole className="w-4 h-4" />
-              Unlock Full Report — $19.90
+              <LockKeyhole className="w-4 h-4" /> Unlock Full Report — $19.90
             </Link>
           </div>
 
-          {filteredLocked.slice(0, 5).map((finding) => {
+          {filteredLocked.slice(0, 5).map((finding, index) => {
             const accent = lockedAccentClasses[finding.severity];
+            const hint = getSafeLockedHint(finding, index);
             return (
               <div key={finding.id} className={`overflow-hidden rounded-xl border border-ink-700 border-l-4 ${accent.border} bg-ink-900`}>
                 <div className="grid lg:grid-cols-[150px_minmax(0,1fr)_310px]">
@@ -182,33 +179,26 @@ export function FindingsTable({ findings, lockedFindings = [] }: { findings: Fin
                       <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Open</span>
                     </div>
 
-                    <p className="mt-4 text-sm text-gray-400">A vulnerability was detected during the {lockedSectionLabels[finding.section]} scan.</p>
+                    <h3 className="mt-4 text-base font-semibold text-gray-200">{hint.title}</h3>
+                    <p className="mt-1.5 text-sm leading-relaxed text-gray-400">{hint.text}</p>
 
                     <div aria-hidden="true" className="mt-5 space-y-3 blur-[6px] opacity-55 select-none pointer-events-none">
                       <div className="h-3.5 w-[78%] rounded bg-gray-300/45" />
                       <div className="h-3 w-[92%] rounded bg-gray-500/45" />
                       <div className="h-3 w-[66%] rounded bg-gray-500/40" />
-                      <div className="h-3 w-[84%] rounded bg-gray-600/45" />
                     </div>
                   </div>
 
                   <div className="border-t lg:border-l lg:border-t-0 border-ink-700 bg-ink-950/45 p-5 sm:p-6 flex flex-col justify-center">
-                    <div className="flex items-center gap-2 text-gray-100">
-                      <LockKeyhole className="w-5 h-5 text-accent-400" />
-                      <p className="text-sm font-semibold">Finding details are locked</p>
-                    </div>
+                    <div className="flex items-center gap-2 text-gray-100"><LockKeyhole className="w-5 h-5 text-accent-400" /><p className="text-sm font-semibold">Finding details are locked</p></div>
                     <p className="mt-2 text-xs text-gray-500">Upgrade to Pro to see:</p>
                     <div className="mt-3 space-y-2">
                       {['Full vulnerability description', 'Technical evidence', 'Affected endpoint and impact', 'Step-by-step remediation'].map((item) => (
-                        <div key={item} className="flex items-center gap-2 text-xs text-gray-400">
-                          <CheckCircle2 className="w-3.5 h-3.5 text-accent-400 shrink-0" />
-                          <span>{item}</span>
-                        </div>
+                        <div key={item} className="flex items-center gap-2 text-xs text-gray-400"><CheckCircle2 className="w-3.5 h-3.5 text-accent-400 shrink-0" /><span>{item}</span></div>
                       ))}
                     </div>
                     <Link to="/checkout/pro" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent-500 px-4 py-2.5 text-sm font-bold text-ink-950 hover:bg-accent-400 transition-colors">
-                      <LockKeyhole className="w-4 h-4" />
-                      Unlock This Finding
+                      <LockKeyhole className="w-4 h-4" /> Unlock This Finding
                     </Link>
                     <p className="mt-2 text-center text-[11px] text-gray-600">Included in the Pro report</p>
                   </div>
@@ -221,15 +211,11 @@ export function FindingsTable({ findings, lockedFindings = [] }: { findings: Fin
 
           <div className="rounded-xl border border-accent-500/25 bg-gradient-to-r from-accent-500/10 via-ink-900 to-cyber-500/5 p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
             <div>
-              <div className="flex items-center gap-2">
-                <LockKeyhole className="w-6 h-6 text-accent-400" />
-                <h3 className="text-xl font-bold text-gray-50">Get the Complete Security Report</h3>
-              </div>
+              <div className="flex items-center gap-2"><LockKeyhole className="w-6 h-6 text-accent-400" /><h3 className="text-xl font-bold text-gray-50">Get the Complete Security Report</h3></div>
               <p className="mt-2 text-sm text-gray-400">Unlock all findings, technical evidence, remediation steps, and the downloadable PDF report.</p>
             </div>
             <Link to="/checkout/pro" className="inline-flex items-center justify-center gap-2 rounded-md bg-accent-500 px-6 py-3 text-sm font-bold text-ink-950 hover:bg-accent-400 transition-colors whitespace-nowrap">
-              <LockKeyhole className="w-4 h-4" />
-              Unlock Full Report — $19.90
+              <LockKeyhole className="w-4 h-4" /> Unlock Full Report — $19.90
             </Link>
           </div>
         </div>

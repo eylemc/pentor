@@ -35,8 +35,8 @@ export function CheckoutSummary({
       <div className="p-6 space-y-5">
         <div className="grid grid-cols-2 gap-4 text-sm">
           <div>
-            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Domain</p>
-            <p className="text-gray-200 font-mono mt-1 break-all">{domain || '—'}</p>
+            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">{plan.domainCredits ? 'Domain credits' : 'Domain'}</p>
+            <p className="text-gray-200 mt-1 break-all">{plan.domainCredits ? `${plan.domainCredits} credit${plan.domainCredits === 1 ? '' : 's'}` : <span className="font-mono">{domain || '—'}</span>}</p>
           </div>
           <div>
             <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Billing</p>
@@ -56,6 +56,14 @@ export function CheckoutSummary({
           <div className="rounded-lg border border-cyber-500/20 bg-cyber-500/5 p-3">
             <p className="text-xs text-cyber-400/90">
               This is a recurring subscription at $9.99/month. You can cancel anytime. Billing renews automatically until canceled.
+            </p>
+          </div>
+        )}
+
+        {plan.domainCredits && (
+          <div className="rounded-lg border border-accent-500/20 bg-accent-500/5 p-3">
+            <p className="text-xs text-accent-300/90">
+              Each credit activates a Pro assessment for one verified domain. Credits do not expire until used; additional credits are $5 each.
             </p>
           </div>
         )}

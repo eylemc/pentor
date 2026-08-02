@@ -7,6 +7,8 @@ COPY --from=nuclei /usr/local/bin/nuclei /usr/local/bin/nuclei
 COPY index.mjs ./index.mjs
 COPY apply-finding-taxonomy.mjs ./apply-finding-taxonomy.mjs
 RUN node ./apply-finding-taxonomy.mjs && rm ./apply-finding-taxonomy.mjs
+COPY apply-score-calibration.mjs ./apply-score-calibration.mjs
+RUN node ./apply-score-calibration.mjs && rm ./apply-score-calibration.mjs
 COPY data-security.mjs ./data-security.mjs
 COPY rls-security.mjs ./rls-security.mjs
 COPY client-source-security.mjs ./client-source-security.mjs

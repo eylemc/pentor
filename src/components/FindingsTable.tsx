@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { Search, ArrowUpDown, LockKeyhole } from 'lucide-react';
+import { Search, ArrowUpDown, LockKeyhole, AlertTriangle, CheckCircle2 } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Finding, Severity, FindingStatus } from '@/data/findings';
 import { FindingCard } from '@/components/FindingCard';
@@ -37,6 +37,13 @@ interface LockedFindingPreview {
 const lockedSectionLabels: Record<LockedFindingPreview['section'], string> = {
   network: 'Network Security',
   database: 'Database Security',
+};
+
+const lockedAccentClasses: Record<LockedFindingPreview['severity'], { border: string; icon: string; glow: string }> = {
+  critical: { border: 'border-l-danger-500', icon: 'text-danger-400', glow: 'bg-danger-500/15' },
+  high: { border: 'border-l-warn-500', icon: 'text-warn-400', glow: 'bg-warn-500/15' },
+  medium: { border: 'border-l-accent-500', icon: 'text-accent-400', glow: 'bg-accent-500/15' },
+  low: { border: 'border-l-cyber-500', icon: 'text-cyber-400', glow: 'bg-cyber-500/15' },
 };
 
 export function FindingsTable({ findings, lockedFindings = [] }: { findings: Finding[]; lockedFindings?: LockedFindingPreview[] }) {
@@ -139,46 +146,92 @@ export function FindingsTable({ findings, lockedFindings = [] }: { findings: Fin
 
       {filteredLocked.length > 0 && (
         <div className="space-y-3 pt-1">
-          <div className="rounded-lg border border-accent-500/25 bg-accent-500/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="rounded-lg border border-accent-500/30 bg-accent-500/5 px-4 py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 shadow-[0_0_28px_rgba(16,185,129,0.06)]">
             <div className="flex items-center gap-3">
-              <LockKeyhole className="w-5 h-5 text-accent-400 shrink-0" />
+              <div className="flex h-10 w-10 items-center justify-center rounded-full border border-accent-500/30 bg-accent-500/10">
+                <LockKeyhole className="w-5 h-5 text-accent-400" />
+              </div>
               <div>
                 <p className="text-sm font-semibold text-gray-100">{filteredLocked.length} additional security {filteredLocked.length === 1 ? 'finding' : 'findings'} detected</p>
                 <p className="text-xs text-gray-500 mt-0.5">Unlock every vulnerability, technical evidence, remediation step, and the complete security report.</p>
               </div>
             </div>
-            <Link to="/checkout/pro" className="inline-flex items-center justify-center rounded-md bg-accent-500 px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-400 transition-colors whitespace-nowrap">
+            <Link to="/checkout/pro" className="inline-flex items-center justify-center gap-2 rounded-md bg-accent-500 px-5 py-2.5 text-sm font-bold text-ink-950 hover:bg-accent-400 transition-colors whitespace-nowrap">
+              <LockKeyhole className="w-4 h-4" />
               Unlock Full Report — $19.90
             </Link>
           </div>
 
-          {filteredLocked.slice(0, 5).map((finding) => (
-            <div key={finding.id} className="relative overflow-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 min-h-[168px]">
-              <div className="relative z-10 flex items-start justify-between gap-4">
-                <div className="flex flex-wrap items-center gap-3">
-                  <SeverityBadge severity={finding.severity} />
-                  <span className="text-sm font-semibold text-gray-200">{lockedSectionLabels[finding.section]}</span>
-                </div>
-                <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Open</span>
-              </div>
+          {filteredLocked.slice(0, 5).map((finding) => {
+            const accent = lockedAccentClasses[finding.severity];
+            return (
+              <div key={finding.id} className={`overflow-hidden rounded-xl border border-ink-700 border-l-4 ${accent.border} bg-ink-900`}>
+                <div className="grid lg:grid-cols-[150px_minmax(0,1fr)_310px]">
+                  <div className="hidden lg:flex items-center justify-center border-r border-ink-700 bg-ink-950/35 p-5">
+                    <div className={`flex h-24 w-24 items-center justify-center rounded-full border border-current/30 ${accent.glow} ${accent.icon} shadow-[0_0_30px_currentColor]`}>
+                      <AlertTriangle className="h-14 w-14" strokeWidth={1.8} />
+                    </div>
+                  </div>
 
-              <div aria-hidden="true" className="mt-5 space-y-3 blur-[6px] opacity-55 select-none pointer-events-none">
-                <div className="h-3.5 w-[78%] rounded bg-gray-300/45" />
-                <div className="h-3 w-[92%] rounded bg-gray-500/45" />
-                <div className="h-3 w-[66%] rounded bg-gray-500/40" />
-                <div className="h-3 w-[84%] rounded bg-gray-600/45" />
-              </div>
+                  <div className="relative min-h-[190px] p-5 sm:p-6">
+                    <div className="relative z-10 flex items-start justify-between gap-4">
+                      <div className="flex flex-wrap items-center gap-3">
+                        <SeverityBadge severity={finding.severity} />
+                        <span className="text-base font-semibold text-gray-100">{lockedSectionLabels[finding.section]}</span>
+                      </div>
+                      <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Open</span>
+                    </div>
 
-              <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-center border-t border-ink-700/80 bg-ink-950/80 px-4 py-3 backdrop-blur-sm">
-                <div className="flex items-center gap-2 text-sm font-semibold text-gray-100">
-                  <LockKeyhole className="w-4 h-4 text-accent-400" />
-                  Unlock the complete finding
+                    <p className="mt-4 text-sm text-gray-400">A vulnerability was detected during the {lockedSectionLabels[finding.section]} scan.</p>
+
+                    <div aria-hidden="true" className="mt-5 space-y-3 blur-[6px] opacity-55 select-none pointer-events-none">
+                      <div className="h-3.5 w-[78%] rounded bg-gray-300/45" />
+                      <div className="h-3 w-[92%] rounded bg-gray-500/45" />
+                      <div className="h-3 w-[66%] rounded bg-gray-500/40" />
+                      <div className="h-3 w-[84%] rounded bg-gray-600/45" />
+                    </div>
+                  </div>
+
+                  <div className="border-t lg:border-l lg:border-t-0 border-ink-700 bg-ink-950/45 p-5 sm:p-6 flex flex-col justify-center">
+                    <div className="flex items-center gap-2 text-gray-100">
+                      <LockKeyhole className="w-5 h-5 text-accent-400" />
+                      <p className="text-sm font-semibold">Finding details are locked</p>
+                    </div>
+                    <p className="mt-2 text-xs text-gray-500">Upgrade to Pro to see:</p>
+                    <div className="mt-3 space-y-2">
+                      {['Full vulnerability description', 'Technical evidence', 'Affected endpoint and impact', 'Step-by-step remediation'].map((item) => (
+                        <div key={item} className="flex items-center gap-2 text-xs text-gray-400">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-accent-400 shrink-0" />
+                          <span>{item}</span>
+                        </div>
+                      ))}
+                    </div>
+                    <Link to="/checkout/pro" className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-md bg-accent-500 px-4 py-2.5 text-sm font-bold text-ink-950 hover:bg-accent-400 transition-colors">
+                      <LockKeyhole className="w-4 h-4" />
+                      Unlock This Finding
+                    </Link>
+                    <p className="mt-2 text-center text-[11px] text-gray-600">Included in the Pro report</p>
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
 
           {filteredLocked.length > 5 && <p className="text-center text-xs text-gray-500">+ {filteredLocked.length - 5} more findings in the full Pro report</p>}
+
+          <div className="rounded-xl border border-accent-500/25 bg-gradient-to-r from-accent-500/10 via-ink-900 to-cyber-500/5 p-5 sm:p-6 flex flex-col lg:flex-row lg:items-center justify-between gap-5">
+            <div>
+              <div className="flex items-center gap-2">
+                <LockKeyhole className="w-6 h-6 text-accent-400" />
+                <h3 className="text-xl font-bold text-gray-50">Get the Complete Security Report</h3>
+              </div>
+              <p className="mt-2 text-sm text-gray-400">Unlock all findings, technical evidence, remediation steps, and the downloadable PDF report.</p>
+            </div>
+            <Link to="/checkout/pro" className="inline-flex items-center justify-center gap-2 rounded-md bg-accent-500 px-6 py-3 text-sm font-bold text-ink-950 hover:bg-accent-400 transition-colors whitespace-nowrap">
+              <LockKeyhole className="w-4 h-4" />
+              Unlock Full Report — $19.90
+            </Link>
+          </div>
         </div>
       )}
     </div>

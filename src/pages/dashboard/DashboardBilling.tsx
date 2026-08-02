@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Card, CardBody, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { billingData } from '@/data/dashboard';
-import { pricingPlans } from '@/data/pricing';
+import { domainCreditPlan, pricingPlans } from '@/data/pricing';
 import { useToast } from '@/components/ui/Toast';
 
 export function DashboardBilling() {
@@ -16,6 +16,21 @@ export function DashboardBilling() {
         <h1 className="text-2xl font-bold text-gray-50">Billing</h1>
         <p className="text-sm text-gray-500 mt-1">Manage your plan, purchases, and invoices.</p>
       </div>
+
+      <Card>
+        <CardHeader title="Domain credits" icon={<CreditCard className="w-5 h-5" />} />
+        <CardBody>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <p className="text-3xl font-bold text-gray-100">{billingData.domainCredits}</p>
+              <p className="text-sm text-gray-500">Available Pro domain credits</p>
+            </div>
+            <Link to="/checkout/domain-credit">
+              <Button variant="primary" size="sm">Add domain credit — {domainCreditPlan.priceLabel}</Button>
+            </Link>
+          </div>
+        </CardBody>
+      </Card>
 
       <Card>
         <CardHeader title="Current plan" icon={<CreditCard className="w-5 h-5" />} />

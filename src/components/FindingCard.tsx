@@ -6,6 +6,7 @@ import { cn } from '@/lib/cn';
 
 export function FindingCard({ finding, defaultOpen }: { finding: Finding; defaultOpen?: boolean }) {
   const [open, setOpen] = useState(defaultOpen ?? false);
+  const displayStatus = finding.severity === 'passed' ? 'no_action' : finding.status;
 
   return (
     <div className="surface shadow-card overflow-hidden transition-colors hover:border-ink-600">
@@ -25,7 +26,7 @@ export function FindingCard({ finding, defaultOpen }: { finding: Finding; defaul
         </div>
         <div className="flex items-center gap-3 shrink-0">
           <span className="hidden sm:block">
-            <StatusBadge status={finding.status} />
+            <StatusBadge status={displayStatus} />
           </span>
           <ChevronDown
             className={cn('w-4 h-4 text-gray-500 transition-transform', open && 'rotate-180')}
@@ -43,7 +44,7 @@ export function FindingCard({ finding, defaultOpen }: { finding: Finding; defaul
           </div>
           <DetailSection label="What Pentor observed" value={finding.observed} />
           <DetailSection label="Why it matters" value={finding.impact} />
-          <DetailSection label="Recommended fix" value={finding.recommendation} />
+          {finding.severity !== 'passed' && <DetailSection label="Recommended fix" value={finding.recommendation} />}
           {finding.references.length > 0 && (
             <div>
               <p className="text-xs font-semibold text-gray-400 uppercase tracking-wider mb-2">References</p>
@@ -61,7 +62,7 @@ export function FindingCard({ finding, defaultOpen }: { finding: Finding; defaul
             </div>
           )}
           <div className="sm:hidden">
-            <StatusBadge status={finding.status} />
+            <StatusBadge status={displayStatus} />
           </div>
         </div>
       )}

@@ -291,15 +291,15 @@ function PricingSection() {
         <SectionHeading
           eyebrow="Pricing"
           title="Simple, transparent pricing"
-          subtitle="Start free and upgrade when you need deeper analysis, monitoring, or a human specialist."
+          subtitle="Start free, secure three domains with Pro, and add more for $5 each whenever you need them."
         />
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 gap-5">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-5">
           {pricingPlans.map((plan) => (
             <PricingCard key={plan.id} plan={plan} className={plan.popular ? 'lg:translate-y-[-8px]' : ''} />
           ))}
         </div>
         <p className="mt-8 text-xs text-gray-600 text-center max-w-2xl mx-auto">
-          Exact scan scope and frequency vary by package and will be refined as Pentor grows. No test can prove the absence of every vulnerability.
+          Pro includes 3 domain credits. Additional domain credits cost $5 each and do not expire until used. No test can prove the absence of every vulnerability.
         </p>
       </div>
     </section>

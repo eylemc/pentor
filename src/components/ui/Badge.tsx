@@ -28,12 +28,13 @@ export function SeverityBadge({ severity, size = 'sm' }: { severity: Severity; s
   );
 }
 
-type StatusType = 'open' | 'acknowledged' | 'fixed' | 'accepted' | 'verified' | 'pending' | 'expired' | 'healthy' | 'attention' | 'new-finding' | 'active' | 'paused' | 'off' | 'completed' | 'in-progress' | 'queued' | 'failed' | 'scope-review' | 'scheduled' | 'report-ready';
+type StatusType = 'open' | 'acknowledged' | 'fixed' | 'accepted' | 'no_action' | 'verified' | 'pending' | 'expired' | 'healthy' | 'attention' | 'new-finding' | 'active' | 'paused' | 'off' | 'completed' | 'in-progress' | 'queued' | 'failed' | 'scope-review' | 'scheduled' | 'report-ready';
 
 const statusConfig: Record<StatusType, { label: string; dot: string; text: string }> = {
   open: { label: 'Open', dot: 'bg-warn-400', text: 'text-warn-400' },
   acknowledged: { label: 'Acknowledged', dot: 'bg-cyber-400', text: 'text-cyber-400' },
   fixed: { label: 'Fixed', dot: 'bg-accent-400', text: 'text-accent-300' },
+  no_action: { label: 'No action needed', dot: 'bg-accent-400', text: 'text-accent-300' },
   accepted: { label: 'Accepted Risk', dot: 'bg-gray-400', text: 'text-gray-400' },
   verified: { label: 'Verified', dot: 'bg-accent-400', text: 'text-accent-300' },
   pending: { label: 'Pending', dot: 'bg-warn-400', text: 'text-warn-400' },

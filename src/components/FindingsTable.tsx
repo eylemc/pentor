@@ -3,6 +3,7 @@ import { Search, ArrowUpDown, LockKeyhole } from 'lucide-react';
 import { Link } from 'react-router-dom';
 import type { Finding, Severity, FindingStatus } from '@/data/findings';
 import { FindingCard } from '@/components/FindingCard';
+import { SeverityBadge } from '@/components/ui/Badge';
 import { cn } from '@/lib/cn';
 
 type SortKey = 'severity' | 'status' | 'date';
@@ -32,6 +33,11 @@ interface LockedFindingPreview {
   severity: 'critical' | 'high' | 'medium' | 'low';
   section: 'network' | 'database';
 }
+
+const lockedSectionLabels: Record<LockedFindingPreview['section'], string> = {
+  network: 'Network Security',
+  database: 'Database Security',
+};
 
 export function FindingsTable({ findings, lockedFindings = [] }: { findings: Finding[]; lockedFindings?: LockedFindingPreview[] }) {
   const [search, setSearch] = useState('');
@@ -138,28 +144,40 @@ export function FindingsTable({ findings, lockedFindings = [] }: { findings: Fin
               <LockKeyhole className="w-5 h-5 text-accent-400 shrink-0" />
               <div>
                 <p className="text-sm font-semibold text-gray-100">{filteredLocked.length} additional security {filteredLocked.length === 1 ? 'finding' : 'findings'} detected</p>
-                <p className="text-xs text-gray-500 mt-0.5">Unlock the evidence, business impact, and step-by-step remediation.</p>
+                <p className="text-xs text-gray-500 mt-0.5">Unlock every vulnerability, technical evidence, remediation step, and the complete security report.</p>
               </div>
             </div>
             <Link to="/checkout/pro" className="inline-flex items-center justify-center rounded-md bg-accent-500 px-4 py-2 text-sm font-semibold text-ink-950 hover:bg-accent-400 transition-colors whitespace-nowrap">
-              Unlock Pro Report — $19.90
+              Unlock Full Report — $19.90
             </Link>
           </div>
+
           {filteredLocked.slice(0, 5).map((finding) => (
-            <div key={finding.id} className="relative overflow-hidden rounded-xl border border-ink-700 bg-ink-900 min-h-[76px]">
-              <div aria-hidden="true" className="absolute inset-0 flex items-center gap-4 px-5 blur-[5px] opacity-45 select-none">
-                <span className="rounded border border-gray-600 px-3 py-1 text-xs capitalize text-gray-300">{finding.severity}</span>
-                <div className="flex-1">
-                  <div className="h-3 w-56 max-w-full rounded bg-gray-400/50" />
-                  <div className="h-2.5 w-80 max-w-[70%] rounded bg-gray-600/50 mt-2" />
+            <div key={finding.id} className="relative overflow-hidden rounded-xl border border-ink-700 bg-ink-900 p-5 min-h-[168px]">
+              <div className="relative z-10 flex items-start justify-between gap-4">
+                <div className="flex flex-wrap items-center gap-3">
+                  <SeverityBadge severity={finding.severity} />
+                  <span className="text-sm font-semibold text-gray-200">{lockedSectionLabels[finding.section]}</span>
                 </div>
-                <span className="text-sm text-gray-400">Open</span>
+                <span className="text-xs font-medium uppercase tracking-wider text-gray-500">Open</span>
               </div>
-              <div className="absolute inset-0 flex items-center justify-center bg-ink-900/35">
-                <div className="flex items-center gap-2 text-sm font-medium text-gray-200"><LockKeyhole className="w-4 h-4 text-accent-400" /> Pro finding locked</div>
+
+              <div aria-hidden="true" className="mt-5 space-y-3 blur-[6px] opacity-55 select-none pointer-events-none">
+                <div className="h-3.5 w-[78%] rounded bg-gray-300/45" />
+                <div className="h-3 w-[92%] rounded bg-gray-500/45" />
+                <div className="h-3 w-[66%] rounded bg-gray-500/40" />
+                <div className="h-3 w-[84%] rounded bg-gray-600/45" />
+              </div>
+
+              <div className="absolute inset-x-0 bottom-0 z-20 flex items-center justify-center border-t border-ink-700/80 bg-ink-950/80 px-4 py-3 backdrop-blur-sm">
+                <div className="flex items-center gap-2 text-sm font-semibold text-gray-100">
+                  <LockKeyhole className="w-4 h-4 text-accent-400" />
+                  Unlock the complete finding
+                </div>
               </div>
             </div>
           ))}
+
           {filteredLocked.length > 5 && <p className="text-center text-xs text-gray-500">+ {filteredLocked.length - 5} more findings in the full Pro report</p>}
         </div>
       )}

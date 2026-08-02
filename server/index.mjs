@@ -7,6 +7,9 @@ import { isIP } from 'node:net';
 import { spawn } from 'node:child_process';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
+import { runDataSecurityScan } from './data-security.mjs';
+import { runRlsIsolationScan } from './rls-security.mjs';
+import { runClientSourceSecurityScan } from './client-source-security.mjs';
 
 const port = Number(process.env.PORT || 3000);
 const allowedOrigins = (process.env.CORS_ORIGINS || '').split(',').map((v) => v.trim()).filter(Boolean);
@@ -14,8 +17,10 @@ const verifications = new Map();
 const scans = new Map();
 const cacheDir = process.env.SCAN_CACHE_DIR || '/app/data/scan-cache';
 const cacheTtlMs = Number(process.env.SCAN_CACHE_TTL_MS || 24 * 60 * 60_000);
-const reportCacheVersion = 'reports-v3';
-const advancedCheckpointVersion = 'advanced-checkpoints-v2';
+const scannerUrl = process.env.SCANNER_URL || '';
+const scannerToken = process.env.SCANNER_TOKEN || '';
+const reportCacheVersion = 'reports-v10-client-source-security';
+const advancedCheckpointVersion = 'deep-checkpoints-v9-client-source-security';
 const scanAllowlist = new Set((process.env.SCAN_ALLOWLIST || 'liqheat.com,www.liqheat.com').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean));
 
 const phases = [
@@ -171,7 +176,7 @@ function inspectCertificate(domain) {
 function finding(id, title, severity, area, observed, impact, recommendation, category, passed = false) {
   return {
     id, title, severity, confidence: 'High', affectedArea: area, observed, impact, recommendation,
-    references: ['Pentor Free Scan v1'], detectedAt: new Date().toISOString(), status: passed ? 'fixed' : 'open', category,
+    references: ['Pentor Free Scan v1'], detectedAt: new Date().toISOString(), status: passed ? 'no_action' : 'open', category,
   };
 }
 
@@ -251,7 +256,7 @@ function headerFix(platform, header, value, note = '') {
   ].join('\n');
 }
 
-async function runSafeScan(domain) {
+async function runSafeScan(domain, { includeDatabase = true } = {}) {
   const findings = [];
   const addresses = await assertPublicHost(domain);
   const tls = await inspectCertificate(domain);
@@ -336,13 +341,23 @@ async function runSafeScan(domain) {
       exists ? 'Review it periodically.' : `Consider publishing ${title} if appropriate.`, 'Public metadata', exists));
   }
 
+  let dataCoverage = null;
+  if (includeDatabase) {
+    const dataSecurity = await runDataSecurityScan({
+      domain, tier: 'free', safeFetch, readLimitedText, makeFinding: finding,
+    });
+    findings.push(...dataSecurity.findings);
+    dataCoverage = dataSecurity.coverage;
+  }
+
   const weights = { critical: 30, high: 18, medium: 8, low: 3, info: 0, passed: 0 };
   const score = Math.max(0, 100 - findings.reduce((sum, item) => sum + weights[item.severity], 0));
   const severityCounts = { critical: 0, high: 0, medium: 0, low: 0, passed: 0 };
   for (const item of findings) if (item.severity in severityCounts) severityCounts[item.severity] += 1;
   return {
     domain, score, severityCounts, findings, generatedAt: new Date().toISOString(), tier: 'Free Scan',
-    summary: `Pentor Free Scan v1 performed ${findings.length} controlled DNS, TLS, HTTP header, cookie, CORS, and public-metadata checks against ${domain}.`,
+    summary: `Pentor Free Scan v1 performed ${findings.length} controlled DNS, TLS, HTTP header, cookie, CORS, public-metadata${includeDatabase ? ', and basic data-security' : ''} checks against ${domain}.`,
+    ...(dataCoverage ? { dataSecurityCoverage: dataCoverage } : {}),
   };
 }
 
@@ -360,8 +375,12 @@ function recalculateReport(report, tier) {
   return report;
 }
 
-async function runProScan(domain) {
-  const report = await runSafeScan(domain);
+async function runProScan(domain, { includeNetwork = true, includeDatabase = true } = {}) {
+  if (!includeNetwork && !includeDatabase) throw new Error('Select at least one Pro Scan security area.');
+  const report = includeNetwork
+    ? await runSafeScan(domain, { includeDatabase: false })
+    : { domain, score: 100, severityCounts: { critical: 0, high: 0, medium: 0, low: 0, passed: 0 }, findings: [], generatedAt: new Date().toISOString(), tier: 'Pro Scan' };
+  if (includeNetwork) {
   const response = await safeFetch(`https://${domain}/`, domain);
   const platform = detectPlatform(response.headers);
   await response.body?.cancel();
@@ -400,7 +419,43 @@ async function runProScan(domain) {
     'Mail routing', mx.length ? `${mx.length} MX record(s) were detected.` : 'No MX record was detected for the apex domain.',
     'MX records are required only when the domain receives email.', mx.length ? 'No action required.' : 'If the domain should receive email, configure MX records with the email provider.',
     'Domain and email security', mx.length > 0));
-  return recalculateReport(report, 'Pro Scan');
+  try {
+    const sourceSecurity = await runClientSourceSecurityScan({ domain, safeFetch, readLimitedText, makeFinding: finding });
+    report.findings.push(...sourceSecurity.findings);
+    report.sourceSecurityCoverage = sourceSecurity.coverage;
+  } catch {
+    report.findings.push(finding('SRC-SCAN-001', 'Client-side source inspection was incomplete', 'info', domain,
+      'Pentor could not complete the bounded HTML and JavaScript source inspection. No credential-exposure conclusion was produced.',
+      'Credentials embedded in an inaccessible or unprocessed client bundle may remain undetected.',
+      'Confirm that public client assets are reachable, then rerun the Pro Network & App Security scan.',
+      'Client-side source and credential security'));
+  }
+  }
+  let dataSecurity = null;
+  let toolSecurity = null;
+  if (includeDatabase) {
+    dataSecurity = await runDataSecurityScan({
+      domain, tier: 'pro', safeFetch, readLimitedText, makeFinding: finding,
+    });
+    const toolTargets = dataSecurity.coverage.toolTargets || [];
+    delete dataSecurity.coverage.toolTargets;
+    toolSecurity = await runExternalToolScan(domain, 'pro', toolTargets);
+    report.findings.push(...dataSecurity.findings, ...externalToolFindings(domain, toolSecurity));
+    report.dataSecurityCoverage = dataSecurity.coverage;
+    report.toolSecurityCoverage = toolSecurity;
+  }
+  const completed = recalculateReport(report, 'Pro Scan');
+  completed.scanScope = { network: includeNetwork, database: includeDatabase };
+  if (dataSecurity && toolSecurity) {
+    const confirmedInjectionSignals = (dataSecurity.coverage.errorSignals || 0) + (dataSecurity.coverage.booleanSignals || 0) + (dataSecurity.coverage.noSqlSignals || 0) +
+      (toolSecurity.sqlmap || []).filter((item) => item.vulnerable).length;
+    completed.summary = `Pentor Pro Scan reviewed ${dataSecurity.coverage.discovered} public parameterized route(s), tested ${dataSecurity.coverage.tested} selected input(s) with ${dataSecurity.coverage.quoteChecks || 0} quote checks, ${dataSecurity.coverage.booleanChecks || 0} boolean comparisons, and ${dataSecurity.coverage.noSqlChecks || 0} NoSQL operator comparisons, scanned ${report.sourceSecurityCoverage?.documentsScanned || 0} public client-source document(s), then ran independent SQL injection assessment on ${toolSecurity.sqlmap?.length || 0} route(s) and checked public database service exposure. ${confirmedInjectionSignals === 0 ? 'No confirmed injection issue was found within the tested public surface.' : 'One or more potential injection issues require review.'}`;
+  }
+  if (!dataSecurity || !toolSecurity) {
+    const selected = [includeNetwork ? 'network and application security' : '', includeDatabase ? 'database security' : ''].filter(Boolean).join(' and ');
+    completed.summary = `Pentor Pro Scan completed the selected ${selected} assessment against ${domain}.`;
+  }
+  return completed;
 }
 
 function cachePath(domain, tier) {
@@ -509,21 +564,91 @@ function runNucleiPass(domain, {
   });
 }
 
-async function runAdvancedScan(domain, onProgress = () => {}, signal, bypassCache = false) {
-  const checkpoints = await readAdvancedCheckpoints(domain, bypassCache);
+async function runExternalToolScan(domain, tier, targets, signal) {
+  if (!scannerUrl || !scannerToken) return { profile: tier, available: false, sqlmap: [], nmap: null, restrictions: [] };
+  const timeout = AbortSignal.timeout(tier === 'advanced' ? 210_000 : 90_000);
+  const combined = signal ? AbortSignal.any([signal, timeout]) : timeout;
+  try {
+    const response = await fetch(`${scannerUrl}/scan`, {
+      method: 'POST', signal: combined,
+      headers: { Authorization: `Bearer ${scannerToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ domain, tier, targets }),
+    });
+    if (!response.ok) throw new Error(`scanner returned HTTP ${response.status}`);
+    return { available: true, ...await response.json() };
+  } catch (error) {
+    if (signal?.aborted) throw new Error('Scan cancelled.');
+    console.error('[PENTOR] External scanner unavailable', domain, tier, error.message);
+    return { profile: tier, available: false, sqlmap: [], nmap: null, restrictions: [], error: 'Detection worker unavailable' };
+  }
+}
+
+function externalToolFindings(domain, result) {
+  const findings = [];
+  const vulnerable = result.sqlmap?.filter((item) => item.vulnerable) || [];
+  if (vulnerable.length) {
+    findings.push(finding('TOOL-SQLMAP-001', 'Additional assessment found a potential SQL injection point', 'high', vulnerable.map((item) => item.target).join(', '),
+      `The isolated detection-only sqlmap worker identified ${vulnerable.length} public injection point(s). No schema enumeration, database extraction, file access, credential attack, or operating-system command was permitted.`,
+      'A confirmed SQL injection point may allow unauthorized database access if it is manually exploited.',
+      'Reproduce in staging, replace dynamic SQL with parameterized queries, enforce strict server-side types, add regression tests, and rerun Pentor.',
+      'Data and injection security'));
+    findings.at(-1).references = ['sqlmap detection engine', 'OWASP WSTG - Testing for SQL Injection'];
+  }
+  const openServices = result.nmap?.openDatabaseServices || [];
+  if (openServices.length) {
+    findings.push(finding('TOOL-NMAP-DB-001', 'Public database service exposure detected', 'high', domain,
+      `The isolated safe Nmap profile observed public database service exposure: ${openServices.join('; ')}. Pentor did not attempt authentication or brute force.`,
+      'Internet-reachable database services expand the attack surface and may expose administrative protocols directly.',
+      'Restrict the service to private networks or an explicit IP allowlist, require TLS and strong authentication, then verify the port is no longer publicly reachable.',
+      'Public database exposure'));
+    findings.at(-1).references = ['Nmap service/version detection'];
+  } else if (result.available && result.nmap?.completed) {
+    findings.push(finding('TOOL-NMAP-DB-000', 'No public database service exposure detected', 'passed', domain,
+      'Pentor checked common PostgreSQL, MySQL, Microsoft SQL Server, Oracle, MongoDB, Redis, and Elasticsearch service ports using a safe service-identification profile. No public database service was confirmed.',
+      'Keeping database administration protocols off the public internet reduces direct attack surface.',
+      'No action needed.', 'Public database exposure', true));
+    findings.at(-1).references = ['Nmap safe service/version detection'];
+  }
+  if (result.available && !vulnerable.length) {
+    findings.push(finding('TOOL-SQLMAP-000', 'Additional SQL injection assessment passed', 'passed', domain,
+      `${result.sqlmap?.length || 0} selected public route(s) received an independent automated SQL injection assessment. No SQL injection point was confirmed.`,
+      'No sqlmap confirmation reduces evidence of public SQL injection within the tested surface but does not cover authenticated or hidden routes.',
+      'Continue using parameterized queries and test authenticated APIs with dedicated staging accounts.', 'Data and injection security', true));
+  }
+  if (!result.available) {
+    findings.push(finding('TOOL-COVERAGE-001', 'External database tool coverage unavailable', 'info', domain,
+      'The isolated sqlmap/Nmap worker did not complete, so Pentor retained the validated built-in data-security results.',
+      'Tool coverage is incomplete, but no vulnerability is inferred from a scanner availability failure.',
+      'Check the pentor-scanner container health and rerun a fresh scan.', 'Scan coverage'));
+  }
+  return findings;
+}
+
+async function runAdvancedScan(domain, onProgress = () => {}, signal, bypassCache = false, rlsConfig = null, requestedScope = null) {
+  const scanScope = {
+    network: requestedScope?.network !== false,
+    database: requestedScope?.database !== false,
+  };
+  if (!scanScope.network && !scanScope.database) throw new Error('Select at least one Pro Scan security area.');
+  const completeScope = scanScope.network && scanScope.database;
+  const checkpoints = await readAdvancedCheckpoints(domain, bypassCache || !completeScope);
   let report = checkpoints.stages.baseline?.value;
   const baselineFromCache = Boolean(report);
-  if (report) {
+  if (!scanScope.network) {
+    report = { domain, score: 100, severityCounts: { critical: 0, high: 0, medium: 0, low: 0, passed: 0 }, findings: [], generatedAt: new Date().toISOString(), tier: 'Pro Scan' };
+  } else if (report) {
     onProgress('Reusing cached baseline security checks', 25);
   } else {
     onProgress('Running baseline security checks', 18);
-    report = await runProScan(domain);
-    await saveAdvancedCheckpoint(domain, checkpoints, 'baseline', report);
+    report = await runProScan(domain, { includeNetwork: true, includeDatabase: false });
+    if (completeScope) await saveAdvancedCheckpoint(domain, checkpoints, 'baseline', report);
   }
 
-  let infrastructure = checkpoints.stages.infrastructure?.value;
+  let infrastructure = scanScope.network ? checkpoints.stages.infrastructure?.value : { results: [], timedOut: false, name: 'infrastructure', elapsedMs: 0, timeoutMs: 0 };
   const infrastructureFromCache = Boolean(infrastructure);
-  if (infrastructure) {
+  if (!scanScope.network) {
+    // Network and application templates were not selected.
+  } else if (infrastructure) {
     onProgress('Reusing cached TLS and DNS template checks', 42);
   } else {
     onProgress('Running focused TLS and DNS template checks', 30);
@@ -533,12 +658,14 @@ async function runAdvancedScan(domain, onProgress = () => {}, signal, bypassCach
       timeoutMs: 2 * 60_000,
       signal,
     });
-    if (!infrastructure.timedOut) await saveAdvancedCheckpoint(domain, checkpoints, 'infrastructure', infrastructure);
+    if (completeScope && !infrastructure.timedOut) await saveAdvancedCheckpoint(domain, checkpoints, 'infrastructure', infrastructure);
   }
 
-  let curated = checkpoints.stages.curated?.value;
+  let curated = scanScope.network ? checkpoints.stages.curated?.value : { results: [], timedOut: false, name: 'curated-web', elapsedMs: 0, timeoutMs: 0 };
   const curatedFromCache = Boolean(curated);
-  if (curated) {
+  if (!scanScope.network) {
+    // Network and application templates were not selected.
+  } else if (curated) {
     onProgress('Reusing cached verified web exposure checks', 63);
   } else {
     onProgress('Running verified web exposure checks', 48);
@@ -550,21 +677,64 @@ async function runAdvancedScan(domain, onProgress = () => {}, signal, bypassCach
       timeoutMs: 3 * 60_000,
       signal,
     });
-    if (!curated.timedOut) await saveAdvancedCheckpoint(domain, checkpoints, 'curated', curated);
+    if (completeScope && !curated.timedOut) await saveAdvancedCheckpoint(domain, checkpoints, 'curated', curated);
   }
 
-  let automatic = checkpoints.stages.automatic?.value;
+  let automatic = scanScope.network ? checkpoints.stages.automatic?.value : { results: [], timedOut: false, name: 'automatic', elapsedMs: 0, timeoutMs: 0 };
   const automaticFromCache = Boolean(automatic);
-  if (automatic) {
+  if (!scanScope.network) {
+    // Network and application templates were not selected.
+  } else if (automatic) {
     onProgress('Reusing cached technology-specific templates', 79);
   } else {
     onProgress('Running technology-specific vulnerability templates', 61);
     automatic = await runNucleiPass(domain, {
       name: 'automatic', automatic: true, timeoutMs: 3 * 60_000, signal,
     });
-    if (!automatic.timedOut) await saveAdvancedCheckpoint(domain, checkpoints, 'automatic', automatic);
+    if (completeScope && !automatic.timedOut) await saveAdvancedCheckpoint(domain, checkpoints, 'automatic', automatic);
   }
-  onProgress('Validating and prioritizing findings', 84);
+
+  let dataSecurity = scanScope.database ? checkpoints.stages.dataSecurity?.value : null;
+  const dataSecurityFromCache = Boolean(dataSecurity);
+  if (!scanScope.database) {
+    // Database security was not selected.
+  } else if (dataSecurity) {
+    onProgress('Reusing cached data and injection security checks', 84);
+  } else {
+    onProgress('Running controlled data and injection security checks', 78);
+    dataSecurity = await runDataSecurityScan({
+      domain, tier: 'pro', safeFetch, readLimitedText, makeFinding: finding, signal,
+      onProgress: (message) => onProgress(message, 82),
+    });
+    if (completeScope) await saveAdvancedCheckpoint(domain, checkpoints, 'dataSecurity', dataSecurity);
+  }
+  const toolTargets = dataSecurity?.coverage.toolTargets || [];
+  if (dataSecurity) delete dataSecurity.coverage.toolTargets;
+  let toolSecurity = scanScope.database ? checkpoints.stages.toolSecurity?.value : null;
+  const toolSecurityFromCache = Boolean(toolSecurity);
+  if (!scanScope.database) {
+    // Database tools were not selected.
+  } else if (toolSecurity) {
+    onProgress('Reusing cached isolated database tool checks', 88);
+  } else {
+    onProgress('Running isolated sqlmap and safe database exposure checks', 85);
+    toolSecurity = await runExternalToolScan(domain, 'pro', toolTargets, signal);
+    if (completeScope && toolSecurity.available) await saveAdvancedCheckpoint(domain, checkpoints, 'toolSecurity', toolSecurity);
+  }
+  if (dataSecurity && toolSecurity) {
+    report.findings = report.findings.filter((item) => !/^(?:DATA|INJ|TOOL|RLS)-/i.test(item.id));
+    report.findings.push(...dataSecurity.findings, ...externalToolFindings(domain, toolSecurity));
+    report.dataSecurityCoverage = dataSecurity.coverage;
+    report.toolSecurityCoverage = toolSecurity;
+  }
+  if (scanScope.database && rlsConfig) {
+    onProgress('Testing authenticated row-level read isolation', 91);
+    const rlsSecurity = await runRlsIsolationScan(rlsConfig, finding);
+    report.findings.push(...rlsSecurity.findings);
+    report.rlsSecurityCoverage = rlsSecurity.coverage;
+  }
+
+  onProgress('Validating and prioritizing findings', 88);
   const nucleiResults = [...infrastructure.results, ...curated.results, ...automatic.results];
   const timedOut = infrastructure.timedOut || curated.timedOut || automatic.timedOut;
   const seen = new Set();
@@ -580,8 +750,8 @@ async function runAdvancedScan(domain, onProgress = () => {}, signal, bypassCach
     report.findings.push(finding(`NUCLEI-${templateId}`, info.name || templateId, severity, matched,
       info.description || `Nuclei template ${templateId} matched the authorized target.`,
       info.impact || 'This automated match may indicate an exposed component, misconfiguration, or known vulnerability.',
-      info.remediation || 'Validate the match, identify the affected component and version, apply the vendor security update or recommended configuration change, then rerun the Advanced Scan.',
-      'Advanced vulnerability templates'));
+      info.remediation || 'Validate the match, identify the affected component and version, apply the vendor security update or recommended configuration change, then rerun the Pro Deep Scan.',
+      'Deep vulnerability templates'));
     report.findings.at(-1).references = refs.length ? refs : [`Nuclei template: ${templateId}`];
   }
   if (timedOut) {
@@ -589,16 +759,16 @@ async function runAdvancedScan(domain, onProgress = () => {}, signal, bypassCach
     const passSummary = timedOutPasses.map((pass) =>
       `${pass.name} pass reached its ${Math.round(pass.timeoutMs / 60_000)}-minute limit after ${Math.round(pass.elapsedMs / 1000)} seconds`
     ).join('; ');
-    report.findings.push(finding('SCAN-001', 'Advanced scan safety window reached', 'info', domain,
+    report.findings.push(finding('SCAN-001', 'Deep Scan safety window reached', 'info', domain,
       `Pentor retained the validated results collected before the cutoff. ${passSummary}.`,
       'Coverage may be incomplete because one or more Advanced template passes did not finish before the safety cutoff.',
-      'Review the collected findings and rerun the Advanced Scan during a lower-latency window. For exhaustive coverage, request a scoped human penetration test.',
+      'Review the collected findings and rerun the Pro Deep Scan during a lower-latency window. For exhaustive coverage, request a scoped human penetration test.',
       'Scan coverage'));
   }
   const rawMatches = nucleiResults.length;
   const uniqueMatches = seen.size;
   const cloudflareFronted = report.findings.some((item) => item.id === 'TECH-001' && /cloudflare/i.test(item.title));
-  report.scanCoverage = {
+  if (scanScope.network) report.scanCoverage = {
     completed: !timedOut,
     rawMatches,
     uniqueMatches,
@@ -608,14 +778,21 @@ async function runAdvancedScan(domain, onProgress = () => {}, signal, bypassCach
       { name: 'TLS and DNS templates', source: infrastructureFromCache ? 'cache' : 'live', status: infrastructure.timedOut ? 'partial' : 'completed', elapsedMs: infrastructure.elapsedMs, matches: infrastructure.results.length },
       { name: 'Verified web exposure templates', source: curatedFromCache ? 'cache' : 'live', status: curated.timedOut ? 'partial' : 'completed', elapsedMs: curated.elapsedMs, matches: curated.results.length },
       { name: 'Technology-specific templates', source: automaticFromCache ? 'cache' : 'live', status: automatic.timedOut ? 'partial' : 'completed', elapsedMs: automatic.elapsedMs, matches: automatic.results.length },
+      ...(dataSecurity && toolSecurity ? [
+        { name: 'Data and injection security', source: dataSecurityFromCache ? 'cache' : 'live', status: 'completed', matches: dataSecurity.coverage.errorSignals + dataSecurity.coverage.booleanSignals + (dataSecurity.coverage.noSqlSignals || 0) },
+        { name: 'Isolated database tools', source: toolSecurityFromCache ? 'cache' : 'live', status: toolSecurity.available ? 'completed' : 'partial', matches: (toolSecurity.sqlmap || []).filter((item) => item.vulnerable).length + (toolSecurity.nmap?.openDatabaseServices?.length || 0) },
+      ] : []),
     ],
     limitations: cloudflareFronted
       ? ['Cloudflare was detected at the public edge. Origin-server technology and vulnerabilities hidden behind the edge may require authenticated or origin-aware testing.']
       : [],
   };
-  onProgress('Building your report', 94);
-  const completedReport = recalculateReport(report, 'Advanced Scan');
-  completedReport.summary = `Pentor Advanced Scan completed its baseline and three template passes against ${domain}. It produced ${rawMatches} raw template matches, validated ${uniqueMatches} unique Advanced finding${uniqueMatches === 1 ? '' : 's'}, and suppressed ${Math.max(0, rawMatches - uniqueMatches)} duplicate result${rawMatches - uniqueMatches === 1 ? '' : 's'}.`;
+  onProgress('Building your report', 96);
+  const completedReport = recalculateReport(report, 'Pro Scan');
+  completedReport.scanScope = scanScope;
+  completedReport.deepScan = true;
+  const scopeSummary = [scanScope.network ? 'network and application security' : '', scanScope.database ? 'database security' : ''].filter(Boolean).join(' and ');
+  completedReport.summary = `Pentor Pro Scan completed the selected ${scopeSummary} assessment against ${domain}.${dataSecurity ? ` It tested ${dataSecurity.coverage.tested} public data parameter(s).` : ''}${scanScope.network ? ` Deep Scan produced ${rawMatches} raw template matches and validated ${uniqueMatches} unique vulnerability template finding${uniqueMatches === 1 ? '' : 's'}.` : ''}`;
   return completedReport;
 }
 
@@ -637,7 +814,7 @@ const server = createServer(async (req, res) => {
   const url = new URL(req.url || '/', `http://${req.headers.host || 'localhost'}`);
   try {
     if (req.method === 'GET' && url.pathname === '/api/health') {
-      return send(res, 200, { ok: true, service: 'pentor-api', mode: 'safe-scan-v1', time: new Date().toISOString() }, origin);
+      return send(res, 200, { ok: true, service: 'pentor-api', mode: 'safe-scan-v2-data-security', time: new Date().toISOString() }, origin);
     }
 
     if (req.method === 'POST' && url.pathname === '/api/domains/validate') {
@@ -688,17 +865,31 @@ const server = createServer(async (req, res) => {
       const scanId = randomUUID();
       const startedAt = new Date().toISOString();
       const requestedType = String(body.testType || 'Free Scan').toLowerCase();
-      const tier = requestedType.includes('advanced') ? 'advanced' : requestedType.includes('pro') ? 'pro' : 'free';
-      if (tier === 'advanced' && (!body.acceptedAdvancedRisk || body.termsVersion !== '1.0')) {
-        return send(res, 400, { error: 'Advanced Scan requires explicit authorization, risk acceptance, and Terms v1.0 acceptance.' }, origin);
+      const tier = requestedType.includes('pro') || requestedType.includes('advanced') ? 'pro' : 'free';
+      const deepScan = tier === 'pro' && (body.deepScan === true || requestedType.includes('deep') || requestedType.includes('advanced'));
+      const scanScope = tier === 'pro' ? {
+        network: body.scanScope?.network !== false,
+        database: body.scanScope?.database !== false,
+      } : { network: true, database: true };
+      if (tier === 'pro' && !scanScope.network && !scanScope.database) {
+        return send(res, 400, { error: 'Select Network & App Security, Database Security, or both.' }, origin);
       }
-      const cached = body.forceRescan ? null : await readCachedReport(domain, tier);
+      if (deepScan && !scanScope.network) {
+        return send(res, 400, { error: 'Deep Vulnerability Scan requires Network & App Security.' }, origin);
+      }
+      if (deepScan && (!body.acceptedAdvancedRisk || body.termsVersion !== '1.0')) {
+        return send(res, 400, { error: 'Deep Vulnerability Scan requires explicit authorization, risk acceptance, and Terms v1.0 acceptance.' }, origin);
+      }
+      const partialProScope = tier === 'pro' && (!scanScope.network || !scanScope.database);
+      const cacheTier = deepScan ? 'pro-deep' : tier;
+      const cached = body.forceRescan || body.rlsConfig || partialProScope ? null : await readCachedReport(domain, cacheTier);
       if (cached) {
         const cachedReport = { ...cached.report, servedFromCache: true, cachedAt: cached.cachedAt };
         scans.set(scanId, {
           scanId, domain, testType: cachedReport.tier, startedAt, complete: true, error: null,
           report: cachedReport, currentPhase: 'Cached report ready', progress: 100,
-          cacheHit: true, cachedAt: cached.cachedAt,
+          cacheHit: true, cachedAt: cached.cachedAt, scanScope: cachedReport.scanScope || scanScope,
+          deepScan: Boolean(cachedReport.deepScan || deepScan), cacheTier,
         });
         return send(res, 200, { ok: true, scanId, startedAt, cached: true, cachedAt: cached.cachedAt }, origin);
       }
@@ -706,12 +897,12 @@ const server = createServer(async (req, res) => {
       scans.set(scanId, {
         scanId,
         domain,
-        testType: tier === 'advanced' ? 'Advanced Scan' : tier === 'pro' ? 'Pro Scan' : 'Free Scan',
+        testType: deepScan ? 'Pro Deep Scan' : tier === 'pro' ? 'Pro Scan' : 'Free Scan',
         startedAt,
         complete: false,
         error: null,
         termsVersion: String(body.termsVersion || verification.termsVersion || 'unknown'),
-        advancedRiskAccepted: tier === 'advanced' ? true : null,
+        advancedRiskAccepted: deepScan ? true : null,
         acceptedAt: body.acceptedAt || new Date().toISOString(),
         sourceIp: req.socket.remoteAddress || null,
         userAgent: req.headers['user-agent'] || null,
@@ -719,22 +910,26 @@ const server = createServer(async (req, res) => {
         progress: 6,
         controller,
         cancelled: false,
+        noCache: Boolean(body.rlsConfig) || partialProScope,
+        scanScope,
+        deepScan,
+        cacheTier,
       });
       const updateProgress = (currentPhase, progress) => {
         const scan = scans.get(scanId);
         if (scan && !scan.complete) Object.assign(scan, { currentPhase, progress });
       };
-      const run = tier === 'advanced'
-        ? runAdvancedScan(domain, updateProgress, controller.signal, Boolean(body.forceRescan))
-        : tier === 'pro' ? runProScan(domain) : runSafeScan(domain);
+      const run = deepScan
+        ? runAdvancedScan(domain, updateProgress, controller.signal, Boolean(body.forceRescan), body.rlsConfig || null, scanScope)
+        : tier === 'pro' ? runProScan(domain, { includeNetwork: scanScope.network, includeDatabase: scanScope.database }) : runSafeScan(domain);
       run.then(async (report) => {
         const scan = scans.get(scanId);
         if (!scan || scan.cancelled) return;
         let cachedAt = null;
         const partialCoverage = report.findings?.some((item) => item.id === 'SCAN-001');
-        if (!partialCoverage) {
+        if (!partialCoverage && !scan.noCache) {
           try {
-            cachedAt = await writeCachedReport(domain, tier, report);
+            cachedAt = await writeCachedReport(domain, scan.cacheTier || tier, report);
           } catch (cacheError) {
             console.error('[PENTOR] Could not persist scan cache', domain, tier, cacheError);
           }
@@ -772,6 +967,7 @@ const server = createServer(async (req, res) => {
         phase: scan.complete ? phases.length : 0, phases,
         currentPhase: scan.currentPhase, progress: scan.progress,
         complete: scan.complete, error: scan.error, cached: Boolean(scan.cacheHit), cachedAt: scan.cachedAt || null,
+        scanScope: scan.scanScope || null, deepScan: Boolean(scan.deepScan),
         log: [scan.currentPhase].filter(Boolean),
       }, origin);
     }

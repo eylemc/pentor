@@ -19,7 +19,7 @@ const cacheDir = process.env.SCAN_CACHE_DIR || '/app/data/scan-cache';
 const cacheTtlMs = Number(process.env.SCAN_CACHE_TTL_MS || 24 * 60 * 60_000);
 const scannerUrl = process.env.SCANNER_URL || '';
 const scannerToken = process.env.SCANNER_TOKEN || '';
-const reportCacheVersion = 'reports-v13-free-pro-preview';
+const reportCacheVersion = 'reports-v14-blurred-free-preview';
 const advancedCheckpointVersion = 'deep-checkpoints-v11-clean-coverage';
 const scanAllowlist = new Set((process.env.SCAN_ALLOWLIST || 'liqheat.com,www.liqheat.com,koinvizyon.com,www.koinvizyon.com,hamsi.ai,www.hamsi.ai,contentdetect.ai,www.contentdetect.ai,textara.ai,www.textara.ai').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean));
 
@@ -440,11 +440,10 @@ function createFreePreviewReport(fullReport) {
   const actionable = fullReport.findings
     .filter((item) => item.status === 'open' && severityRank[item.severity])
     .sort((left, right) => severityRank[right.severity] - severityRank[left.severity]);
-  const visibleIds = new Set(actionable.slice(0, 2).map((item) => item.id));
   const visibleFindings = fullReport.findings.filter((item) =>
-    item.status !== 'open' || !severityRank[item.severity] || visibleIds.has(item.id)
+    item.status !== 'open' || !severityRank[item.severity]
   );
-  const locked = actionable.slice(2).map((item, index) => ({
+  const locked = actionable.map((item, index) => ({
     id: `LOCKED-${index + 1}`,
     severity: item.severity,
     section: /^(?:DATA|INJ|TOOL|RLS)-/i.test(item.id) || /database|injection|row-level security|public database/i.test(item.category)
@@ -463,7 +462,7 @@ function createFreePreviewReport(fullReport) {
     ? `The scan found ${issueParts.join(', ')} issue${issueCount === 1 ? '' : 's'} within the tested public surface.`
     : 'No actionable issue was found within the tested public surface.';
   const lockSentence = locked.length
-    ? `The ${Math.min(2, actionable.length)} highest-priority finding${Math.min(2, actionable.length) === 1 ? ' is' : 's are'} shown below; ${locked.length} additional finding${locked.length === 1 ? ' is' : 's are'} available in the full Pro report.`
+    ? `${locked.length} actionable finding${locked.length === 1 ? ' is' : 's are'} shown by severity below; unlock the full Pro report to view the affected areas, evidence, business impact and remediation steps.`
     : 'All findings detected by this scan are shown below.';
 
   return {

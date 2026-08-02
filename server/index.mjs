@@ -19,9 +19,9 @@ const cacheDir = process.env.SCAN_CACHE_DIR || '/app/data/scan-cache';
 const cacheTtlMs = Number(process.env.SCAN_CACHE_TTL_MS || 24 * 60 * 60_000);
 const scannerUrl = process.env.SCANNER_URL || '';
 const scannerToken = process.env.SCANNER_TOKEN || '';
-const reportCacheVersion = 'reports-v12-clean-coverage';
+const reportCacheVersion = 'reports-v13-free-pro-preview';
 const advancedCheckpointVersion = 'deep-checkpoints-v11-clean-coverage';
-const scanAllowlist = new Set((process.env.SCAN_ALLOWLIST || 'liqheat.com,www.liqheat.com').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean));
+const scanAllowlist = new Set((process.env.SCAN_ALLOWLIST || 'liqheat.com,www.liqheat.com,koinvizyon.com,www.koinvizyon.com,hamsi.ai,www.hamsi.ai,contentdetect.ai,www.contentdetect.ai,textara.ai,www.textara.ai').split(',').map((v) => v.trim().toLowerCase()).filter(Boolean));
 
 const phases = [
   'Preparing authorized target',
@@ -433,6 +433,57 @@ function humanReadableSummary(report, { includeNetwork, dataSecurity, toolSecuri
     sentences.push(`${report.sourceSecurityCoverage.documentsScanned || 0} public client-source document${report.sourceSecurityCoverage.documentsScanned === 1 ? '' : 's'} were also checked for exposed credentials.`);
   }
   return sentences.join(' ');
+}
+
+function createFreePreviewReport(fullReport) {
+  const severityRank = { critical: 4, high: 3, medium: 2, low: 1 };
+  const actionable = fullReport.findings
+    .filter((item) => item.status === 'open' && severityRank[item.severity])
+    .sort((left, right) => severityRank[right.severity] - severityRank[left.severity]);
+  const visibleIds = new Set(actionable.slice(0, 2).map((item) => item.id));
+  const visibleFindings = fullReport.findings.filter((item) =>
+    item.status !== 'open' || !severityRank[item.severity] || visibleIds.has(item.id)
+  );
+  const locked = actionable.slice(2).map((item, index) => ({
+    id: `LOCKED-${index + 1}`,
+    severity: item.severity,
+    section: /^(?:DATA|INJ|TOOL|RLS)-/i.test(item.id) || /database|injection|row-level security|public database/i.test(item.category)
+      ? 'database'
+      : 'network',
+  }));
+  const counts = fullReport.severityCounts;
+  const issueParts = [
+    counts.critical ? `${counts.critical} critical` : '',
+    counts.high ? `${counts.high} high-priority` : '',
+    counts.medium ? `${counts.medium} medium-priority` : '',
+    counts.low ? `${counts.low} low-priority` : '',
+  ].filter(Boolean);
+  const issueCount = counts.critical + counts.high + counts.medium + counts.low;
+  const riskSentence = issueCount
+    ? `The scan found ${issueParts.join(', ')} issue${issueCount === 1 ? '' : 's'} within the tested public surface.`
+    : 'No actionable issue was found within the tested public surface.';
+  const lockSentence = locked.length
+    ? `The ${Math.min(2, actionable.length)} highest-priority finding${Math.min(2, actionable.length) === 1 ? ' is' : 's are'} shown below; ${locked.length} additional finding${locked.length === 1 ? ' is' : 's are'} available in the full Pro report.`
+    : 'All findings detected by this scan are shown below.';
+
+  return {
+    ...fullReport,
+    tier: 'Free Scan Preview',
+    isFreePreview: true,
+    totalFindings: fullReport.findings.length,
+    findings: visibleFindings,
+    lockedFindings: locked,
+    lockedFindingsCount: locked.length,
+    summary: `Pentor completed the standard Network, Application and Database checks used by Pro. ${riskSentence} ${lockSentence}`,
+    deepScan: false,
+    scanCoverage: undefined,
+    scanScope: { network: true, database: true },
+  };
+}
+
+async function runFreePreviewScan(domain) {
+  const fullReport = await runProScan(domain, { includeNetwork: true, includeDatabase: true });
+  return createFreePreviewReport(fullReport);
 }
 
 async function runProScan(domain, { includeNetwork = true, includeDatabase = true } = {}) {
@@ -976,7 +1027,7 @@ const server = createServer(async (req, res) => {
       };
       const run = deepScan
         ? runAdvancedScan(domain, updateProgress, controller.signal, Boolean(body.forceRescan), body.rlsConfig || null, scanScope)
-        : tier === 'pro' ? runProScan(domain, { includeNetwork: scanScope.network, includeDatabase: scanScope.database }) : runSafeScan(domain);
+        : tier === 'pro' ? runProScan(domain, { includeNetwork: scanScope.network, includeDatabase: scanScope.database }) : runFreePreviewScan(domain);
       run.then(async (report) => {
         const scan = scans.get(scanId);
         if (!scan || scan.cancelled) return;

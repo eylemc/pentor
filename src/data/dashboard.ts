@@ -48,7 +48,7 @@ export const dashboardTests: DashboardTest[] = [
   {
     id: 'TST-2041',
     domain: 'acme-widgets.com',
-    package: 'Advanced Test',
+    package: 'Pro Deep Scan',
     status: 'completed',
     started: '2026-08-01 14:20',
     completed: '2026-08-01 14:34',
@@ -57,7 +57,7 @@ export const dashboardTests: DashboardTest[] = [
   {
     id: 'TST-2038',
     domain: 'shop.acme-widgets.com',
-    package: 'Limited Test',
+    package: 'Pro Scan',
     status: 'completed',
     started: '2026-07-28 09:11',
     completed: '2026-07-28 09:18',
@@ -66,7 +66,7 @@ export const dashboardTests: DashboardTest[] = [
   {
     id: 'TST-2050',
     domain: 'acme-widgets.com',
-    package: 'Advanced Test',
+    package: 'Pro Deep Scan',
     status: 'in-progress',
     started: '2026-08-02 08:02',
     completed: '—',
@@ -110,16 +110,16 @@ export interface DashboardReport {
 export const dashboardReports: DashboardReport[] = [
   {
     id: 'RPT-2041',
-    title: 'Advanced Test — acme-widgets.com',
+    title: 'Pro Deep Scan — acme-widgets.com',
     domain: 'acme-widgets.com',
-    testType: 'Advanced Test',
+    testType: 'Pro Deep Scan',
     date: '2026-08-01',
   },
   {
     id: 'RPT-2038',
-    title: 'Limited Test — shop.acme-widgets.com',
+    title: 'Pro Scan — shop.acme-widgets.com',
     domain: 'shop.acme-widgets.com',
-    testType: 'Limited Test',
+    testType: 'Pro Scan',
     date: '2026-07-28',
   },
 ];
@@ -151,21 +151,23 @@ export interface Invoice {
 
 export interface BillingData {
   currentPlan: string;
+  domainCredits: number;
   purchaseHistory: { id: string; item: string; date: string; amount: string }[];
   invoices: Invoice[];
 }
 
 export const billingData: BillingData = {
   currentPlan: 'Continuous Monitoring',
+  domainCredits: 2,
   purchaseHistory: [
-    { id: 'INV-1042', item: 'Advanced Test — acme-widgets.com', date: '2026-08-01', amount: '$29.99' },
+    { id: 'INV-1042', item: 'Pro Scan — 3 domain credits', date: '2026-08-01', amount: '$19.90' },
     { id: 'INV-1041', item: 'Continuous Monitoring (monthly)', date: '2026-08-01', amount: '$9.99' },
-    { id: 'INV-1038', item: 'Limited Test — shop.acme-widgets.com', date: '2026-07-28', amount: '$9.99' },
+    { id: 'INV-1038', item: 'Additional domain credit', date: '2026-07-28', amount: '$5.00' },
   ],
   invoices: [
-    { id: 'INV-1042', description: 'Advanced Test', date: '2026-08-01', amount: '$29.99' },
+    { id: 'INV-1042', description: 'Pro Scan — 3 credits', date: '2026-08-01', amount: '$19.90' },
     { id: 'INV-1041', description: 'Monitoring (Aug)', date: '2026-08-01', amount: '$9.99' },
-    { id: 'INV-1038', description: 'Limited Test', date: '2026-07-28', amount: '$9.99' },
+    { id: 'INV-1038', description: 'Domain credit', date: '2026-07-28', amount: '$5.00' },
   ],
 };
 

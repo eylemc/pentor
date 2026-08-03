@@ -1,4 +1,4 @@
-95-179-169-114.sslip.io {
+95-179-169-114.sslip.io, pentor.95-179-169-114.sslip.io {
     encode zstd gzip
 
     handle /api/* {

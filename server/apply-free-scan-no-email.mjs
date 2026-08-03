@@ -3,17 +3,12 @@ import { readFile, writeFile } from 'node:fs/promises';
 const path = new URL('./index.mjs', import.meta.url);
 let source = await readFile(path, 'utf8');
 
-const before = `      const body = await readJson(req);
+const oldAuthorization = `      const body = await readJson(req);
       const domain = normalizeDomain(body.domain);
       const verification = domain ? verifications.get(domain) : null;
-      if (!domain || !verification?.verified) return send(res, 403, { error: 'Domain verification is required.' }, origin);
-      if (!scanAllowlist.has(domain)) return send(res, 403, { error: 'Real scanning is temporarily restricted to the authorized LiqHeat test domain.' }, origin);
-      const scanId = randomUUID();
-      const startedAt = new Date().toISOString();
-      const requestedType = String(body.testType || 'Free Scan').toLowerCase();
-      const tier = requestedType.includes('pro') || requestedType.includes('advanced') ? 'pro' : 'free';`;
+      if (!domain || !verification?.verified) return send(res, 403, { error: 'Domain verification is required.' }, origin);`;
 
-const after = `      const body = await readJson(req);
+const newAuthorization = `      const body = await readJson(req);
       const domain = normalizeDomain(body.domain);
       const requestedType = String(body.testType || 'Free Scan').toLowerCase();
       const tier = requestedType.includes('pro') || requestedType.includes('advanced') ? 'pro' : 'free';
@@ -24,15 +19,18 @@ const after = `      const body = await readJson(req);
       }
       if (tier === 'free' && (!body.authorized || !body.acceptedTerms || String(body.termsVersion || '') !== '1.0')) {
         return send(res, 400, { error: 'Free Scan requires authorization confirmation and acceptance of Terms v1.0.' }, origin);
-      }
-      if (!scanAllowlist.has(domain)) return send(res, 403, { error: 'Real scanning is temporarily restricted to the authorized LiqHeat test domain.' }, origin);
-      const scanId = randomUUID();
-      const startedAt = new Date().toISOString();`;
+      }`;
 
-if (source.includes(after)) {
+const duplicateTierBlock = `      const requestedType = String(body.testType || 'Free Scan').toLowerCase();
+      const tier = requestedType.includes('pro') || requestedType.includes('advanced') ? 'pro' : 'free';`;
+
+if (source.includes(newAuthorization)) {
   console.log('[PENTOR] Free Scan no-email authorization patch already applied.');
-} else if (source.includes(before)) {
-  source = source.replace(before, after);
+} else if (source.includes(oldAuthorization)) {
+  source = source.replace(oldAuthorization, newAuthorization);
+  const first = source.indexOf(duplicateTierBlock);
+  const second = source.indexOf(duplicateTierBlock, first + duplicateTierBlock.length);
+  if (second !== -1) source = source.slice(0, second) + source.slice(second + duplicateTierBlock.length + 1);
   await writeFile(path, source);
   console.log('[PENTOR] Free Scan no-email authorization patch applied.');
 } else {

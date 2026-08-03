@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/apply-free-scan-copy.mjs",
+    "prebuild": "node scripts/apply-free-scan-copy.mjs && node scripts/apply-fresh-scan-auth.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "test:server": "node --test server/*.test.mjs",

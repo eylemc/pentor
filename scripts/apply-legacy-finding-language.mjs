@@ -58,18 +58,24 @@ for (const [before, after] of replacements) {
   }
 }
 
-// Never display taxonomy-derived preview copy in the locked sales cards. Keep the
-// internal taxonomy in the API, but use a stable customer-facing teaser here.
-const previewBefore = `            const fallback = safeFallback(finding);\n            const title = finding.previewTitle || fallback.title;\n            const text = finding.previewText || fallback.text;`;
-const previewAfter = `            const fallback = safeFallback(finding);\n            const title = fallback.title;\n            const text = fallback.text;`;
-if (source.includes(previewBefore)) {
-  source = source.replace(previewBefore, previewAfter);
+// Preserve provider-specific locked preview copy returned by the API. Older builds
+// deliberately replaced these fields with a generic fallback, making every AI card
+// look identical even though the backend returned distinct provider findings.
+const genericPreview = `            const fallback = safeFallback(finding);\n            const title = fallback.title;\n            const text = fallback.text;`;
+const providerPreview = `            const fallback = safeFallback(finding);\n            const title = finding.previewTitle || fallback.title;\n            const text = finding.previewText || fallback.text;`;
+if (source.includes(genericPreview)) {
+  source = source.replace(genericPreview, providerPreview);
   changed = true;
+}
+
+if (!source.includes('const title = finding.previewTitle || fallback.title;') ||
+    !source.includes('const text = finding.previewText || fallback.text;')) {
+  throw new Error('[PENTOR] Provider-specific locked finding copy verification failed.');
 }
 
 if (changed) {
   await writeFile(path, source);
-  console.log('[PENTOR] Legacy finding-focused report language applied.');
+  console.log('[PENTOR] Finding-focused report language applied with provider-specific previews preserved.');
 } else {
-  console.log('[PENTOR] Legacy finding-focused report language already applied.');
+  console.log('[PENTOR] Finding-focused report language already applied; provider-specific previews preserved.');
 }

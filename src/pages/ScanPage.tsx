@@ -6,6 +6,23 @@ import { api } from '@/services/api';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 
+interface FreeScanConsent {
+  domain: string;
+  authorized: boolean;
+  acceptedTerms: boolean;
+  termsVersion: string;
+  acceptedAt: string;
+}
+
+function readFreeScanConsent(domain: string): FreeScanConsent | null {
+  try {
+    const parsed = JSON.parse(sessionStorage.getItem('pentor-free-scan-consent') || 'null') as FreeScanConsent | null;
+    return parsed?.domain === domain && parsed.authorized && parsed.acceptedTerms ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
 export function ScanPage() {
   const { pendingDomain, pendingPackage, pendingScanScope, pendingDeepScan, setScanId } = useSession();
   const navigate = useNavigate();
@@ -18,15 +35,27 @@ export function ScanPage() {
     if (!pendingDomain || started.current) return;
     started.current = true;
     const isPro = testType === 'Pro Scan';
-    api.startScan({
+    const freeConsent = isPro ? null : readFreeScanConsent(pendingDomain);
+
+    if (!isPro && !freeConsent) {
+      setError('Confirm domain authorization and responsible-use terms before starting the Free Scan.');
+      return;
+    }
+
+    const scanConfig = {
       domain: pendingDomain,
       testType,
+      authorized: isPro ? undefined : true,
+      acceptedTerms: isPro ? undefined : true,
       acceptedAdvancedRisk: isPro && pendingDeepScan,
-      termsVersion: '1.0',
-      acceptedAt: new Date().toISOString(),
+      termsVersion: isPro ? '1.0' : freeConsent?.termsVersion || '1.0',
+      acceptedAt: isPro ? new Date().toISOString() : freeConsent?.acceptedAt || new Date().toISOString(),
       scanScope: isPro ? pendingScanScope : undefined,
       deepScan: isPro && pendingDeepScan,
-    }).then((result) => {
+    };
+
+    api.startScan(scanConfig).then((result) => {
+      if (!isPro) sessionStorage.removeItem('pentor-free-scan-consent');
       setScanId(result.scanId);
       navigate('/report', { replace: true });
     }).catch((err) => {
@@ -46,8 +75,8 @@ export function ScanPage() {
             </div>
             <h1 className="text-xl font-semibold text-gray-100">Scan could not start</h1>
             <p className="text-sm text-danger-300 mt-2 mb-6">{error}</p>
-            <Button onClick={() => window.location.reload()} variant="secondary">
-              <RefreshCw className="w-4 h-4" /> Retry scan
+            <Button onClick={() => navigate('/')} variant="secondary">
+              <RefreshCw className="w-4 h-4" /> Return to scan form
             </Button>
           </>
         ) : (

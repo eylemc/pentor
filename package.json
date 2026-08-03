@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "prebuild": "node scripts/apply-free-scan-copy.mjs && node scripts/apply-fresh-scan-auth.mjs",
+    "prebuild": "node scripts/apply-free-scan-copy.mjs && node scripts/apply-fresh-scan-auth.mjs && node scripts/apply-legacy-finding-language.mjs",
     "build": "vite build",
     "lint": "eslint .",
     "test:server": "node --test server/*.test.mjs",
@@ -16,7 +16,7 @@
     "@supabase/supabase-js": "^2.57.4",
     "lucide-react": "^0.344.0",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1",
+    "react-dom": "^18.3.0",
     "react-router-dom": "^6.30.4"
   },
   "devDependencies": {

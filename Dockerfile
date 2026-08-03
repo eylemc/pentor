@@ -4,6 +4,7 @@ WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm ci
 COPY . .
+RUN node ./apply-finding-sales-copy.mjs
 RUN npm run typecheck && npm run build
 
 FROM nginx:1.27-alpine

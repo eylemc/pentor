@@ -1,0 +1,58 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+  }
+  body {
+    @apply bg-ink-950 text-gray-200 font-sans antialiased;
+    -webkit-font-smoothing: antialiased;
+  }
+  ::selection {
+    @apply bg-accent-500/30 text-white;
+  }
+  :focus-visible {
+    @apply outline-none ring-2 ring-accent-400 ring-offset-2 ring-offset-ink-950;
+  }
+  /* Custom scrollbar */
+  ::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+  }
+  ::-webkit-scrollbar-track {
+    @apply bg-ink-900;
+  }
+  ::-webkit-scrollbar-thumb {
+    @apply bg-ink-700 rounded-full border-2 border-ink-900;
+  }
+  ::-webkit-scrollbar-thumb:hover {
+    @apply bg-ink-600;
+  }
+}
+
+@layer components {
+  .grid-texture {
+    @apply bg-grid-faint bg-grid-sm;
+  }
+  .surface {
+    @apply bg-ink-850/80 border border-ink-700/60 rounded-xl backdrop-blur-sm;
+  }
+  .surface-raised {
+    @apply bg-ink-800/90 border border-ink-700/70 rounded-xl;
+  }
+  .input-base {
+    @apply w-full bg-ink-900/80 border border-ink-600/70 rounded-lg px-4 py-2.5 text-sm text-gray-100
+      placeholder:text-gray-500 transition-colors focus:border-accent-500/70 focus:bg-ink-900
+      focus:ring-1 focus:ring-accent-500/40;
+  }
+  .label-base {
+    @apply block text-sm font-medium text-gray-300 mb-1.5;
+  }
+  .skeleton {
+    @apply rounded-md bg-gradient-to-r from-ink-800 via-ink-750 to-ink-800 bg-[length:700px_100%];
+  }
+}

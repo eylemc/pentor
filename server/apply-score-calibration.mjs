@@ -28,10 +28,10 @@ function calculateScore(findings) {
 }`;
 
 const after = `const CLASS_SEVERITY_PENALTY = {
-  [FINDING_CLASSES.CONFIRMED]: { critical: 40, high: 26, medium: 15, low: 8 },
-  [FINDING_CLASSES.POTENTIAL]: { critical: 28, high: 18, medium: 10, low: 5 },
-  [FINDING_CLASSES.MISCONFIGURATION]: { critical: 20, high: 13, medium: 7, low: 3 },
-  [FINDING_CLASSES.HARDENING]: { critical: 4, high: 3, medium: 2, low: 1 },
+  [FINDING_CLASSES.CONFIRMED]: { critical: 40, high: 28, medium: 18, low: 10 },
+  [FINDING_CLASSES.POTENTIAL]: { critical: 32, high: 22, medium: 13, low: 7 },
+  [FINDING_CLASSES.MISCONFIGURATION]: { critical: 25, high: 17, medium: 10, low: 5 },
+  [FINDING_CLASSES.HARDENING]: { critical: 10, high: 8, medium: 5, low: 3 },
 };
 
 function findingPenalty(item) {
@@ -41,17 +41,16 @@ function findingPenalty(item) {
 
 function calculateScore(findings) {
   let materialPenalty = 0;
-  let hardeningPenalty = 0;
+  let defensiveControlPenalty = 0;
   for (const item of findings) {
     const penalty = findingPenalty(item);
-    if (item.findingClass === FINDING_CLASSES.HARDENING) hardeningPenalty += penalty;
+    if (item.findingClass === FINDING_CLASSES.HARDENING) defensiveControlPenalty += penalty;
     else materialPenalty += penalty;
   }
 
-  // Missing optional defense-in-depth controls should never make an otherwise
-  // clean public site look severely vulnerable. Their combined effect is capped,
-  // while confirmed and repeatable technical evidence remains uncapped.
-  const raw = materialPenalty + Math.min(8, hardeningPenalty);
+  // Defensive-control findings matter commercially and operationally, but several
+  // closely related header checks must not overwhelm confirmed technical evidence.
+  const raw = materialPenalty + Math.min(15, defensiveControlPenalty);
   return Math.max(0, Math.round(100 - raw));
 }`;
 
@@ -62,8 +61,8 @@ if (!source.includes(before)) {
 source = source.replace(before, after);
 source = source.replace(
   "const reportCacheVersion = 'reports-v15-evidence-taxonomy';",
-  "const reportCacheVersion = 'reports-v16-calibrated-taxonomy';",
+  "const reportCacheVersion = 'reports-v17-firmer-risk-score';",
 );
 
 await writeFile(path, source);
-console.log('[PENTOR] Evidence-based score calibration applied.');
+console.log('[PENTOR] Firmer customer-facing risk scoring applied.');

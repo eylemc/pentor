@@ -57,8 +57,8 @@ await transform('src/pages/ReportPage.tsx', 'AI Security report section', (sourc
     );
   }
   next = next.replace(
-    "section: 'network' | 'database' }>;",
+    /section: 'network' \| 'database' \}>;/,
     "section: 'ai' | 'network' | 'database' }>;'",
-  ).replace("}>'\n", '}>\n');
+  ).replace("}>'", '}>');
   return next;
-}, (source) => source.includes('title="AI Security"') && source.includes('findings={aiFindings}') && source.includes('function isAiFinding('));
+}, (source) => source.includes('title="AI Security"') && source.includes('findings={aiFindings}') && source.includes('function isAiFinding(') && source.includes("section: 'ai' | 'network' | 'database'"));

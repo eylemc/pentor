@@ -9,6 +9,8 @@ COPY apply-finding-taxonomy.mjs ./apply-finding-taxonomy.mjs
 RUN node ./apply-finding-taxonomy.mjs && rm ./apply-finding-taxonomy.mjs
 COPY apply-score-calibration.mjs ./apply-score-calibration.mjs
 RUN node ./apply-score-calibration.mjs && rm ./apply-score-calibration.mjs
+COPY apply-free-scan-no-email.mjs ./apply-free-scan-no-email.mjs
+RUN node ./apply-free-scan-no-email.mjs && rm ./apply-free-scan-no-email.mjs
 COPY data-security.mjs ./data-security.mjs
 COPY rls-security.mjs ./rls-security.mjs
 COPY client-source-security.mjs ./client-source-security.mjs

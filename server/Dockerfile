@@ -13,6 +13,8 @@ COPY apply-free-scan-no-email.mjs ./apply-free-scan-no-email.mjs
 RUN node ./apply-free-scan-no-email.mjs && rm ./apply-free-scan-no-email.mjs
 COPY apply-locked-preview-copy.mjs ./apply-locked-preview-copy.mjs
 RUN node ./apply-locked-preview-copy.mjs && rm ./apply-locked-preview-copy.mjs
+COPY apply-preview-runtime-version.mjs ./apply-preview-runtime-version.mjs
+RUN node ./apply-preview-runtime-version.mjs && rm ./apply-preview-runtime-version.mjs
 COPY data-security.mjs ./data-security.mjs
 COPY rls-security.mjs ./rls-security.mjs
 COPY client-source-security.mjs ./client-source-security.mjs

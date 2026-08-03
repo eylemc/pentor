@@ -10,6 +10,17 @@
     }
 }
 
+lab.95-179-169-114.sslip.io {
+    encode zstd gzip
+
+    header {
+        X-Robots-Tag "noindex, nofollow, noarchive"
+        Cache-Control "no-store"
+    }
+
+    reverse_proxy lab:80
+}
+
 http://95.179.169.114 {
     handle /api/* {
         reverse_proxy api:3000

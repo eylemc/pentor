@@ -22,7 +22,7 @@ services:
     environment:
       PORT: "3000"
       CORS_ORIGINS: ""
-      SCAN_ALLOWLIST: "liqheat.com,www.liqheat.com,koinvizyon.com,www.koinvizyon.com,hamsi.ai,www.hamsi.ai,contentdetect.ai,www.contentdetect.ai,textara.ai,www.textara.ai"
+      SCAN_ALLOWLIST: "liqheat.com,www.liqheat.com,koinvizyon.com,www.koinvizyon.com,hamsi.ai,www.hamsi.ai,contentdetect.ai,www.contentdetect.ai,textara.ai,www.textara.ai,lab.95-179-169-114.sslip.io"
       SCAN_CACHE_DIR: "/app/data/scan-cache"
       SCAN_CACHE_TTL_MS: "86400000"
       SCANNER_URL: "http://scanner:3100"
@@ -48,7 +48,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: "3100"
-      SCAN_ALLOWLIST: "liqheat.com,www.liqheat.com,koinvizyon.com,www.koinvizyon.com,hamsi.ai,www.hamsi.ai,contentdetect.ai,www.contentdetect.ai,textara.ai,www.textara.ai"
+      SCAN_ALLOWLIST: "liqheat.com,www.liqheat.com,koinvizyon.com,www.koinvizyon.com,hamsi.ai,www.hamsi.ai,contentdetect.ai,www.contentdetect.ai,textara.ai,www.textara.ai,lab.95-179-169-114.sslip.io"
       SCANNER_TOKEN: "${SCANNER_TOKEN:-change-me-before-public-launch}"
     read_only: true
     tmpfs:
@@ -68,6 +68,29 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  lab:
+    image: nginx:1.27-alpine
+    container_name: pentor-lab
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /var/cache/nginx:size=16m,mode=0755
+      - /var/run:size=1m,mode=0755
+    volumes:
+      - ./lab:/usr/share/nginx/html:ro
+      - ./lab/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - pentor
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "2"
+
   gateway:
     image: caddy:2.10-alpine
     container_name: pentor-gateway
@@ -75,6 +98,7 @@ services:
     depends_on:
       - web
       - api
+      - lab
     ports:
       - "80:80"
       - "443:443"

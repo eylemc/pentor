@@ -50,12 +50,12 @@ export const howItWorks = [
   {
     step: 1,
     title: 'Enter your domain',
-    description: 'Tell us which website you want tested. We normalize the address and get it ready for a controlled assessment.',
+    description: 'Tell us which website you want tested. We normalize the address and prepare a controlled public-surface assessment.',
   },
   {
     step: 2,
-    title: 'Verify authorization by email',
-    description: 'Pentor sends a verification link to an administrative email on your domain. We only test after you confirm you are authorized.',
+    title: 'Confirm authorization',
+    description: 'Confirm that you own the domain or have explicit permission, then accept the responsible-use terms. No email verification is required for Free Scan.',
   },
   {
     step: 3,

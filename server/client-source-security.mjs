@@ -5,53 +5,152 @@ const MAX_DOCUMENT_BYTES = 512_000;
 const MAX_TOTAL_BYTES = 4_000_000;
 
 const SECRET_PATTERNS = [
-  { name: 'Private key', severity: 'critical', confidence: 'High', regex: /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g,
-    reference: 'CWE-321: Use of Hard-coded Cryptographic Key', remediation: 'Revoke or replace the exposed private key immediately, remove it from all client assets, and investigate where the corresponding public identity was used.' },
-  { name: 'Credential-bearing database URL', severity: 'critical', confidence: 'High', regex: /(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis):\/\/[^\s:@/'"`]{1,80}:[^\s@'"`]{4,}@[^\s'"`]+/gi,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Rotate the database credential, remove the connection string from client code, restrict database network access, and move all database connections to a server-side component.' },
-  { name: 'Supabase secret key', severity: 'critical', confidence: 'High', regex: /\bsb_secret_[A-Za-z0-9_-]{20,}\b/g,
-    reference: 'Supabase: Securing your data', remediation: 'Revoke the Supabase secret key, replace it with a publishable key in the browser, and keep the replacement secret only in a protected server-side environment.' },
-  { name: 'Stripe secret or restricted key', severity: 'critical', confidence: 'High', regex: /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g,
-    reference: 'Stripe: API keys', remediation: 'Roll the exposed Stripe key immediately, review Stripe logs for unauthorized activity, and move secret-key operations behind a server-side endpoint.' },
-  { name: 'GitHub access token', severity: 'high', confidence: 'High', regex: /\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{50,255})\b/g,
-    reference: 'GitHub: Secret scanning', remediation: 'Revoke the GitHub token, review its scopes and audit log, create a least-privilege replacement, and store it only in server-side secret storage.' },
-  { name: 'GitLab access token', severity: 'high', confidence: 'High', regex: /\bglpat-[A-Za-z0-9_-]{20,}\b/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Revoke the GitLab token, review its scopes and recent use, then issue a least-privilege replacement outside the client bundle.' },
-  { name: 'Slack token', severity: 'high', confidence: 'High', regex: /\bxox[aboprs]-[A-Za-z0-9-]{20,}\b/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Revoke the Slack token, inspect workspace audit logs, and move the integration credential to a protected backend.' },
-  { name: 'Slack webhook', severity: 'high', confidence: 'High', regex: /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Revoke the Slack webhook and issue a replacement that is called only from a protected backend.' },
-  { name: 'Discord webhook', severity: 'high', confidence: 'High', regex: /https:\/\/(?:discord(?:app)?\.com)\/api\/webhooks\/\d+\/[A-Za-z0-9_-]{20,}/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Delete or regenerate the exposed Discord webhook and proxy webhook calls through a protected backend.' },
-  { name: 'OpenAI-style API key', severity: 'high', confidence: 'High', regex: /\bsk-(?!ant-)(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}\b/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Revoke the API key, inspect provider usage logs, apply spending limits, and keep the replacement exclusively in server-side secret storage.' },
-  { name: 'Anthropic API key', severity: 'high', confidence: 'High', regex: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Revoke the Anthropic key, inspect recent usage, and move all model requests behind a protected server-side endpoint.' },
-  { name: 'SendGrid API key', severity: 'high', confidence: 'High', regex: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{20,}\b/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Revoke the SendGrid key, review email activity, and replace it with a restricted key stored only on the server.' },
-  { name: 'npm access token', severity: 'high', confidence: 'High', regex: /\bnpm_[A-Za-z0-9]{36,}\b/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Revoke the npm token, review package publication activity, and use a least-privilege automation token outside client code.' },
-  { name: 'Hugging Face access token', severity: 'high', confidence: 'High', regex: /\bhf_[A-Za-z0-9]{30,}\b/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Revoke the Hugging Face token, review repository access, and keep the replacement in protected server-side storage.' },
-  { name: 'Google OAuth client secret', severity: 'high', confidence: 'High', regex: /\bGOCSPX-[A-Za-z0-9_-]{20,}\b/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Rotate the OAuth client secret, review authorized redirect URIs and recent activity, and move the secret to a protected backend.' },
-  { name: 'AWS secret access key', severity: 'high', confidence: 'High', valueGroup: 1,
+  {
+    name: 'Private key', severity: 'critical', confidence: 'High',
+    regex: /-----BEGIN (?:RSA |EC |OPENSSH |DSA )?PRIVATE KEY-----/g,
+    reference: 'CWE-321: Use of Hard-coded Cryptographic Key',
+    remediation: 'Revoke or replace the exposed private key immediately, remove it from all client assets, and investigate where the corresponding public identity was used.',
+  },
+  {
+    name: 'Credential-bearing database URL', severity: 'critical', confidence: 'High',
+    regex: /(?:postgres(?:ql)?|mysql|mariadb|mongodb(?:\+srv)?|redis):\/\/[^\s:@/'"`]{1,80}:[^\s@'"`]{4,}@[^\s'"`]+/gi,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Rotate the database credential, remove the connection string from client code, restrict database network access, and move all database connections to a server-side component.',
+  },
+  {
+    name: 'Supabase secret key', severity: 'critical', confidence: 'High',
+    regex: /\bsb_secret_[A-Za-z0-9_-]{20,}\b/g,
+    reference: 'Supabase: Securing your data',
+    remediation: 'Revoke the Supabase secret key, replace it with a publishable key in the browser, and keep the replacement secret only in a protected server-side environment.',
+  },
+  {
+    name: 'Stripe secret or restricted key', severity: 'critical', confidence: 'High',
+    regex: /\b(?:sk|rk)_(?:live|test)_[A-Za-z0-9]{16,}\b/g,
+    reference: 'Stripe: API keys',
+    remediation: 'Roll the exposed Stripe key immediately, review Stripe logs for unauthorized activity, and move secret-key operations behind a server-side endpoint.',
+  },
+  {
+    name: 'GitHub access token', severity: 'high', confidence: 'High',
+    regex: /\b(?:gh[pousr]_[A-Za-z0-9]{36,255}|github_pat_[A-Za-z0-9_]{50,255})\b/g,
+    reference: 'GitHub: Secret scanning',
+    remediation: 'Revoke the GitHub token, review its scopes and audit log, create a least-privilege replacement, and store it only in server-side secret storage.',
+  },
+  {
+    name: 'GitLab access token', severity: 'high', confidence: 'High',
+    regex: /\bglpat-[A-Za-z0-9_-]{20,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the GitLab token, review its scopes and recent use, then issue a least-privilege replacement outside the client bundle.',
+  },
+  {
+    name: 'Slack token', severity: 'high', confidence: 'High',
+    regex: /\bxox[aboprs]-[A-Za-z0-9-]{20,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the Slack token, inspect workspace audit logs, and move the integration credential to a protected backend.',
+  },
+  {
+    name: 'Slack webhook', severity: 'high', confidence: 'High',
+    regex: /https:\/\/hooks\.slack\.com\/services\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+\/[A-Za-z0-9_-]+/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the Slack webhook and issue a replacement that is called only from a protected backend.',
+  },
+  {
+    name: 'Discord webhook', severity: 'high', confidence: 'High',
+    regex: /https:\/\/(?:discord(?:app)?\.com)\/api\/webhooks\/\d+\/[A-Za-z0-9_-]{20,}/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Delete or regenerate the exposed Discord webhook and proxy webhook calls through a protected backend.',
+  },
+  {
+    name: 'OpenAI API key', severity: 'high', confidence: 'High',
+    regex: /\bsk-(?!ant-|or-v1-)(?:proj-|svcacct-)?[A-Za-z0-9_-]{20,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the OpenAI key, inspect provider usage logs, apply project spending limits, and keep the replacement exclusively in server-side secret storage.',
+  },
+  {
+    name: 'Anthropic API key', severity: 'high', confidence: 'High',
+    regex: /\bsk-ant-[A-Za-z0-9_-]{20,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the Anthropic key, inspect recent usage, and move all model requests behind a protected server-side endpoint.',
+  },
+  {
+    name: 'Groq API key', severity: 'high', confidence: 'High',
+    regex: /\bgsk_[A-Za-z0-9_-]{20,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the Groq key, review model usage, apply rate and spending controls, and proxy model requests through an authenticated backend.',
+  },
+  {
+    name: 'OpenRouter API key', severity: 'high', confidence: 'High',
+    regex: /\bsk-or-v1-[A-Za-z0-9_-]{32,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the OpenRouter key, inspect recent usage, configure limits, and keep the replacement in a protected server-side environment.',
+  },
+  {
+    name: 'Replicate API token', severity: 'high', confidence: 'High',
+    regex: /\br8_[A-Za-z0-9_-]{32,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the Replicate token, review recent predictions and billing, and call Replicate only from an authenticated backend.',
+  },
+  {
+    name: 'SendGrid API key', severity: 'high', confidence: 'High',
+    regex: /\bSG\.[A-Za-z0-9_-]{16,}\.[A-Za-z0-9_-]{20,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the SendGrid key, review email activity, and replace it with a restricted key stored only on the server.',
+  },
+  {
+    name: 'npm access token', severity: 'high', confidence: 'High',
+    regex: /\bnpm_[A-Za-z0-9]{36,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the npm token, review package publication activity, and use a least-privilege automation token outside client code.',
+  },
+  {
+    name: 'Hugging Face access token', severity: 'high', confidence: 'High',
+    regex: /\bhf_[A-Za-z0-9]{30,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Revoke the Hugging Face token, review repository and inference access, and keep the replacement in protected server-side storage.',
+  },
+  {
+    name: 'Google OAuth client secret', severity: 'high', confidence: 'High',
+    regex: /\bGOCSPX-[A-Za-z0-9_-]{20,}\b/g,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Rotate the OAuth client secret, review authorized redirect URIs and recent activity, and move the secret to a protected backend.',
+  },
+  {
+    name: 'AWS secret access key', severity: 'high', confidence: 'High', valueGroup: 1,
     regex: /(?:AWS_SECRET_ACCESS_KEY|awsSecretAccessKey)\s*["']?\s*[:=]\s*["'`]([A-Za-z0-9/+=]{32,})["'`]/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Deactivate the AWS access-key pair, inspect CloudTrail for unauthorized use, and replace it with a least-privilege server-side role or credential.' },
-  { name: 'Azure Storage account key', severity: 'critical', confidence: 'High', valueGroup: 1,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Deactivate the AWS access-key pair, inspect CloudTrail for unauthorized use, and replace it with a least-privilege server-side role or credential.',
+  },
+  {
+    name: 'Azure Storage account key', severity: 'critical', confidence: 'High', valueGroup: 1,
     regex: /(?:AccountKey|AZURE_STORAGE_KEY)\s*["']?\s*[:=]\s*["'`]([A-Za-z0-9+/]{40,}={0,2})["'`]/g,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Rotate the storage account key, review storage access logs and network rules, and replace direct browser access with scoped, short-lived access issued by a backend.' },
-  { name: 'Generic hard-coded secret', severity: 'medium', confidence: 'Medium', valueGroup: 1,
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Rotate the storage account key, review storage access logs and network rules, and replace direct browser access with scoped, short-lived access issued by a backend.',
+  },
+  {
+    name: 'Generic hard-coded secret', severity: 'medium', confidence: 'Medium', valueGroup: 1,
     regex: /(?:api[_-]?secret|client[_-]?secret|secret[_-]?key|service[_-]?role[_-]?key|database[_-]?password|db[_-]?password)\s*["']?\s*[:=]\s*["'`]([^"'`\s\\]{16,})["'`]/gi,
-    reference: 'CWE-798: Use of Hard-coded Credentials', remediation: 'Verify the credential, rotate it if active, remove the literal from the client bundle, and use a protected server-side secret store.' },
+    reference: 'CWE-798: Use of Hard-coded Credentials',
+    remediation: 'Verify the credential, rotate it if active, remove the literal from the client bundle, and use a protected server-side secret store.',
+  },
 ];
 
 const GOOGLE_API_KEY = /\bAIza[0-9A-Za-z_-]{30,}\b/g;
 const JWT = /\beyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}\b/g;
 const PUBLIC_CLIENT_VALUE = /^(?:pk_(?:live|test)_|pi_[A-Za-z0-9]+_secret_|seti_[A-Za-z0-9]+_secret_|sb_publishable_)/;
 
+const AI_STACK_SIGNALS = [
+  ['OpenAI', /(?:api\.openai\.com|openai\/|@ai-sdk\/openai|OPENAI_)/i],
+  ['Anthropic', /(?:api\.anthropic\.com|@anthropic-ai|@ai-sdk\/anthropic|ANTHROPIC_)/i],
+  ['Google Gemini', /(?:generativelanguage\.googleapis\.com|@google\/generative-ai|@ai-sdk\/google|GEMINI_)/i],
+  ['Groq', /(?:api\.groq\.com|groq-sdk|@ai-sdk\/groq|GROQ_)/i],
+  ['Hugging Face', /(?:huggingface\.co|@huggingface\/|HF_TOKEN)/i],
+  ['Replicate', /(?:api\.replicate\.com|replicate\/|REPLICATE_)/i],
+  ['Supabase', /(?:supabase\.co|@supabase\/supabase-js|SUPABASE_)/i],
+  ['Vercel AI SDK', /(?:@ai-sdk\/|\bstreamText\s*\(|\bgenerateText\s*\()/i],
+];
+
 function sameAuthorizedOrigin(url, domain) {
-  return url.protocol === 'https:' && (url.hostname === domain || url.hostname === `www.${domain}` || `www.${url.hostname}` === domain);
+  return ['http:', 'https:'].includes(url.protocol) &&
+    (url.hostname === domain || url.hostname === `www.${domain}` || `www.${url.hostname}` === domain);
 }
 
 function discoverScripts(text, base, domain) {
@@ -113,7 +212,7 @@ function safeUrlLabel(raw) {
   }
 }
 
-function scanDocument(text, source, seenSecrets) {
+function scanDocument(text, source, seenSecrets, detectedStacks) {
   const secrets = [];
   const advisories = [];
   const addSecret = (pattern, match, value = match[0]) => {
@@ -122,28 +221,60 @@ function scanDocument(text, source, seenSecrets) {
     if (seenSecrets.has(digest)) return;
     seenSecrets.add(digest);
     secrets.push({
-      ...pattern, source: safeUrlLabel(source), line: lineNumber(text, match.index || 0), preview: maskSecret(value, pattern.name),
+      ...pattern,
+      source: safeUrlLabel(source),
+      line: lineNumber(text, match.index || 0),
+      preview: maskSecret(value, pattern.name),
     });
   };
+
+  for (const [name, regex] of AI_STACK_SIGNALS) if (regex.test(text)) detectedStacks.add(name);
   for (const pattern of SECRET_PATTERNS) {
     for (const match of text.matchAll(pattern.regex)) addSecret(pattern, match, match[pattern.valueGroup || 0]);
   }
   for (const match of serviceRoleJwt(text)) {
-    addSecret({ name: 'Supabase service_role key', severity: 'critical', confidence: 'High',
-      reference: 'Supabase: Securing your data', remediation: 'Rotate the service_role key immediately, audit its use, remove it from the browser bundle, and replace it with a publishable or anon key protected by correctly tested RLS policies.' }, match);
+    addSecret({
+      name: 'Supabase service_role key', severity: 'critical', confidence: 'High',
+      reference: 'Supabase: Securing your data',
+      remediation: 'Rotate the service_role key immediately, audit its use, remove it from the browser bundle, and replace it with a publishable or anon key protected by correctly tested RLS policies.',
+    }, match);
   }
   for (const match of text.matchAll(GOOGLE_API_KEY)) {
     const digest = createHash('sha256').update(match[0]).digest('hex');
     if (seenSecrets.has(digest)) continue;
     seenSecrets.add(digest);
-    advisories.push({ name: 'Client-side Google API key', source: safeUrlLabel(source), line: lineNumber(text, match.index || 0), preview: maskSecret(match[0], 'Google API key') });
+    advisories.push({
+      name: 'Client-side Google API key', source: safeUrlLabel(source),
+      line: lineNumber(text, match.index || 0), preview: maskSecret(match[0], 'Google API key'),
+    });
   }
   return { secrets, advisories };
+}
+
+async function fetchHomepage(domain, safeFetch, signal) {
+  let lastError;
+  for (const protocol of ['https:', 'http:']) {
+    if (signal?.aborted) throw new Error('Scan cancelled.');
+    const url = `${protocol}//${domain}/`;
+    try {
+      const response = await safeFetch(url, domain, { headers: { Accept: 'text/html,*/*;q=0.5' } });
+      if (!response.ok) {
+        await response.body?.cancel();
+        lastError = new Error(`Homepage returned HTTP ${response.status}`);
+        continue;
+      }
+      return { response, url, protocol: protocol.slice(0, -1) };
+    } catch (error) {
+      lastError = error;
+    }
+  }
+  throw lastError || new Error('Homepage could not be reached.');
 }
 
 export async function runClientSourceSecurityScan({ domain, safeFetch, readLimitedText, makeFinding, signal }) {
   const findings = [];
   const seenSecrets = new Set();
+  const detectedStacks = new Set();
   const queued = [];
   const queuedSet = new Set();
   const allSecrets = [];
@@ -163,12 +294,13 @@ export async function runClientSourceSecurityScan({ domain, safeFetch, readLimit
     scriptsDiscovered = queuedSet.size;
   };
 
-  const homepageUrl = `https://${domain}/`;
-  const homepageResponse = await safeFetch(homepageUrl, domain, { headers: { Accept: 'text/html,*/*;q=0.5' } });
+  const homepageResult = await fetchHomepage(domain, safeFetch, signal);
+  const homepageResponse = homepageResult.response;
+  const homepageUrl = homepageResult.url;
   const homepage = await readLimitedText(homepageResponse, MAX_DOCUMENT_BYTES);
   bytesScanned += Buffer.byteLength(homepage);
   documentsScanned += 1;
-  const initial = scanDocument(homepage, homepageUrl, seenSecrets);
+  const initial = scanDocument(homepage, homepageUrl, seenSecrets, detectedStacks);
   allSecrets.push(...initial.secrets);
   allAdvisories.push(...initial.advisories);
   enqueue(discoverScripts(homepage, homepageUrl, domain));
@@ -190,7 +322,7 @@ export async function runClientSourceSecurityScan({ domain, safeFetch, readLimit
       bytesScanned += bodyBytes;
       documentsScanned += 1;
       scriptsScanned += 1;
-      const result = scanDocument(body, url.toString(), seenSecrets);
+      const result = scanDocument(body, url.toString(), seenSecrets, detectedStacks);
       allSecrets.push(...result.secrets);
       allAdvisories.push(...result.advisories);
       enqueue(discoverScripts(body, url, domain));
@@ -200,39 +332,64 @@ export async function runClientSourceSecurityScan({ domain, safeFetch, readLimit
   }
 
   for (const [index, secret] of allSecrets.entries()) {
-    const item = makeFinding(`SRC-SECRET-${String(index + 1).padStart(3, '0')}`, `${secret.name} exposed in client-side source`, secret.severity,
+    const item = makeFinding(
+      `AI-SECRET-${String(index + 1).padStart(3, '0')}`,
+      `${secret.name} exposed in client-side source`,
+      secret.severity,
       `${secret.source}:${secret.line}`,
       `Pentor found a high-confidence ${secret.name.toLowerCase()} pattern in a publicly delivered client asset at line ${secret.line}. Masked preview: ${secret.preview}. The complete value was neither retained nor written to the report.`,
-      'Anyone who can load the website can inspect its delivered HTML and JavaScript. An active server credential may permit unauthorized API access, data access, account actions, or unexpected charges.',
-      `1. Revoke or rotate the exposed value immediately.\n2. ${secret.remediation}\n3. Remove it from frontend environment variables and generated bundles.\n4. Rebuild and redeploy the site, then purge CDN caches.\n5. Review provider audit and usage logs from the earliest possible exposure time.\n6. Rerun Pentor and confirm the pattern is absent.`,
-      'Client-side source and credential security');
+      'Anyone who can load the application can inspect its delivered HTML and JavaScript. An active server credential may permit unauthorized model usage, data access, account actions, or unexpected charges.',
+      `1. Revoke or rotate the exposed value immediately.\n2. ${secret.remediation}\n3. Remove it from frontend environment variables and generated bundles.\n4. Rebuild and redeploy the application, then purge CDN caches.\n5. Review provider audit, usage, and billing logs from the earliest possible exposure time.\n6. Rerun Pentor and confirm the pattern is absent.`,
+      'AI secret exposure',
+    );
     item.confidence = secret.confidence;
     item.references = [secret.reference];
     findings.push(item);
   }
 
   for (const [index, advisory] of allAdvisories.entries()) {
-    const item = makeFinding(`SRC-KEY-${String(index + 1).padStart(3, '0')}`, `${advisory.name} requires restriction review`, 'info',
+    const item = makeFinding(
+      `AI-PUBLIC-KEY-${String(index + 1).padStart(3, '0')}`,
+      `${advisory.name} requires restriction review`,
+      'info',
       `${advisory.source}:${advisory.line}`,
       `A browser-visible Google API key was detected at line ${advisory.line}. Masked preview: ${advisory.preview}. Client exposure can be intentional, so this is not classified as a leaked secret.`,
       'An unrestricted client API key can be copied and abused against enabled APIs, potentially causing data exposure, quota exhaustion, or unexpected charges.',
       'Restrict the key to the required APIs and approved HTTP referrers or application identifiers, apply quotas and billing alerts, and rotate it if unrestricted use is suspected.',
-      'Client-side source and credential security');
+      'AI secret exposure',
+    );
     item.confidence = 'Medium';
     item.references = ['Google Cloud: API key best practices'];
     findings.push(item);
   }
 
   if (!allSecrets.length) {
-    findings.push(makeFinding('SRC-SECRET-000', 'No high-confidence client-side secret exposure detected', 'passed', domain,
+    findings.push(makeFinding(
+      'AI-SECRET-000',
+      'No high-confidence AI or backend secret exposure detected',
+      'passed',
+      domain,
       `Pentor inspected ${documentsScanned} public HTML or JavaScript document(s), including ${scriptsScanned} same-origin script asset(s), without finding a high-confidence server credential pattern.`,
-      'Keeping server credentials out of browser-delivered source prevents straightforward credential theft from public bundles.',
+      'Keeping model-provider and backend credentials out of browser-delivered source prevents straightforward credential theft and cost abuse.',
       'No action required. Continue using server-side secret storage and scan every production build.',
-      'Client-side source and credential security', true));
+      'AI secret exposure',
+      true,
+    ));
   }
 
-  return { findings, coverage: {
-    documentsScanned, scriptsDiscovered, scriptsScanned, bytesScanned, truncatedAssets,
-    secretFindings: allSecrets.length, advisoryFindings: allAdvisories.length,
-  } };
+  return {
+    findings,
+    coverage: {
+      mode: 'ai-secret-exposure',
+      homepageProtocol: homepageResult.protocol,
+      documentsScanned,
+      scriptsDiscovered,
+      scriptsScanned,
+      bytesScanned,
+      truncatedAssets,
+      secretFindings: allSecrets.length,
+      advisoryFindings: allAdvisories.length,
+      aiStackSignals: [...detectedStacks].sort(),
+    },
+  };
 }

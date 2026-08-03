@@ -50,10 +50,10 @@ if (!source.includes('function lockedPreviewForFinding(item)')) {
     previewText: 'Browser-accessible content contains private-key material that may compromise authentication, signing, or encrypted communications.',
     findingClass: 'confirmed_vulnerability',
   };
-  if (/^ai-/i.test(id) || /ai provider|client-side source and credential/.test(combined)) return {
+  if (/^ai-/i.test(id) || /ai provider|client-side source and credential|ai secret exposure/.test(combined)) return {
     previewTitle: title,
-    previewText: 'Pentor identified a provider-specific AI application exposure. Technical evidence, affected asset, and remediation remain available in the full report.',
-    findingClass: 'security_misconfiguration',
+    previewText: item.impact || 'Pentor identified a provider-specific AI application exposure. Technical evidence, affected asset, and remediation remain available in the full report.',
+    findingClass: item.findingClass || 'confirmed_vulnerability',
   };
   return {
     previewTitle: title,
@@ -75,22 +75,28 @@ if (start === -1 || end === -1 || end <= start) {
   throw new Error('[PENTOR] Could not locate locked finding mapper boundaries.');
 }
 
-const replacement = `  const locked = actionable.map((item, index) => ({
-    id: \`LOCKED-${'${index + 1}'}\`,
-    severity: item.severity,
-    section: /^AI-/i.test(item.id) || /AI application|AI provider|client-side source and credential/i.test(item.category)
-      ? 'ai'
-      : /^(?:DATA|INJ|TOOL|RLS)-/i.test(item.id) || /database|injection|row-level security|public database/i.test(item.category)
-        ? 'database'
-        : 'network',
-    ...lockedPreviewForFinding(item),
-  }));`;
+const replacement = `  const locked = actionable.map((item, index) => {
+    const isAi = /^AI-/i.test(item.id) || /AI application|AI provider|client-side source and credential|AI secret exposure/i.test(item.category);
+    const preview = lockedPreviewForFinding(item);
+    return {
+      id: \`LOCKED-${'${index + 1}'}\`,
+      severity: item.severity,
+      section: isAi
+        ? 'ai'
+        : /^(?:DATA|INJ|TOOL|RLS)-/i.test(item.id) || /database|injection|row-level security|public database/i.test(item.category)
+          ? 'database'
+          : 'network',
+      findingClass: preview.findingClass,
+      previewTitle: isAi ? String(item.title || preview.previewTitle) : preview.previewTitle,
+      previewText: isAi ? String(item.impact || preview.previewText) : preview.previewText,
+    };
+  });`;
 
 source = source.slice(0, start) + replacement + source.slice(end);
 
-if (!source.includes('previewTitle:') || !source.includes("section: /^AI-/i.test(item.id)") || !source.includes('...lockedPreviewForFinding(item)')) {
+if (!source.includes('previewTitle: isAi ? String(item.title') || !source.includes('previewText: isAi ? String(item.impact') || !source.includes("section: isAi")) {
   throw new Error('[PENTOR] Locked preview verification failed.');
 }
 
 await writeFile(path, source);
-console.log('[PENTOR] Distinct locked finding previews applied.');
+console.log('[PENTOR] Provider-specific locked finding previews applied.');

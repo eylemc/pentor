@@ -1,7 +1,7 @@
 export type BillingType = 'one-time' | 'monthly' | 'free';
 
 export interface PricingPlan {
-  id: 'free' | 'limited' | 'advanced' | 'monitoring' | 'human';
+  id: 'free' | 'limited' | 'advanced' | 'monitoring' | 'human' | 'domain-credit';
   name: string;
   price: number;
   priceLabel: string;
@@ -13,6 +13,7 @@ export interface PricingPlan {
   ctaTo: string;
   popular?: boolean;
   badge?: string;
+  domainCredits?: number;
 }
 
 export const pricingPlans: PricingPlan[] = [
@@ -110,6 +111,26 @@ export const pricingPlans: PricingPlan[] = [
   },
 ];
 
+export const domainCreditPlan: PricingPlan = {
+  id: 'domain-credit',
+  name: 'AI App Domain Credit',
+  price: 5,
+  priceLabel: '$5',
+  billing: 'one-time',
+  billingNote: 'One-time payment',
+  description: 'Add one reusable Pro AI Scan credit for an authorized domain.',
+  features: [
+    'One Pro AI Scan domain credit',
+    'Full AI and web-security findings',
+    'Prioritized remediation guidance',
+    'Credit remains available until used',
+  ],
+  cta: 'Add Domain Credit',
+  ctaTo: '/checkout/domain-credit',
+  domainCredits: 1,
+};
+
 export function getPlan(id: string): PricingPlan | undefined {
+  if (id === domainCreditPlan.id) return domainCreditPlan;
   return pricingPlans.find((p) => p.id === id);
 }

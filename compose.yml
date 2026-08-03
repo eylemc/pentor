@@ -21,7 +21,7 @@ services:
     restart: unless-stopped
     environment:
       PORT: "3000"
-      CORS_ORIGINS: ""
+      CORS_ORIGINS: "https://95-179-169-114.sslip.io,https://pentor.95-179-169-114.sslip.io,https://pentor.net,https://www.pentor.net"
       SCAN_ALLOWLIST: "liqheat.com,www.liqheat.com,koinvizyon.com,www.koinvizyon.com,hamsi.ai,www.hamsi.ai,contentdetect.ai,www.contentdetect.ai,textara.ai,www.textara.ai,lab.95-179-169-114.sslip.io"
       SCAN_CACHE_DIR: "/app/data/scan-cache"
       SCAN_CACHE_TTL_MS: "86400000"

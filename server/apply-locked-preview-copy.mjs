@@ -3,17 +3,13 @@ import { readFile, writeFile } from 'node:fs/promises';
 const path = './index.mjs';
 let source = await readFile(path, 'utf8');
 
-if (source.includes('function lockedPreviewForFinding(item)')) {
-  console.log('[PENTOR] Distinct locked finding previews already applied.');
-  process.exit(0);
-}
-
-const marker = `function createFreePreviewReport(fullReport) {`;
+const marker = 'function createFreePreviewReport(fullReport) {';
 if (!source.includes(marker)) {
   throw new Error('[PENTOR] Could not locate createFreePreviewReport.');
 }
 
-const helper = `function lockedPreviewForFinding(item) {
+if (!source.includes('function lockedPreviewForFinding(item)')) {
+  const helper = `function lockedPreviewForFinding(item) {
   const title = String(item.title || 'Security finding detected');
   const id = String(item.id || '');
   const category = String(item.category || '');
@@ -67,18 +63,19 @@ const helper = `function lockedPreviewForFinding(item) {
 }
 
 `;
+  source = source.replace(marker, helper + marker);
+}
 
-source = source.replace(marker, helper + marker);
+const startMarker = '  const locked = actionable.map(';
+const endMarker = '\n  const counts = fullReport.severityCounts;';
+const start = source.indexOf(startMarker);
+const end = source.indexOf(endMarker, start);
 
-const before = `  const locked = actionable.map((item, index) => ({
-    id: \`LOCKED-${'${index + 1}'}\`,
-    severity: item.severity,
-    section: /^(?:DATA|INJ|TOOL|RLS)-/i.test(item.id) || /database|injection|row-level security|public database/i.test(item.category)
-      ? 'database'
-      : 'network',
-  }));`;
+if (start === -1 || end === -1 || end <= start) {
+  throw new Error('[PENTOR] Could not locate locked finding mapper boundaries.');
+}
 
-const after = `  const locked = actionable.map((item, index) => ({
+const replacement = `  const locked = actionable.map((item, index) => ({
     id: \`LOCKED-${'${index + 1}'}\`,
     severity: item.severity,
     section: /^AI-/i.test(item.id) || /AI application|AI provider|client-side source and credential/i.test(item.category)
@@ -89,12 +86,9 @@ const after = `  const locked = actionable.map((item, index) => ({
     ...lockedPreviewForFinding(item),
   }));`;
 
-if (!source.includes(before)) {
-  throw new Error('[PENTOR] Could not locate locked finding mapper.');
-}
-source = source.replace(before, after);
+source = source.slice(0, start) + replacement + source.slice(end);
 
-if (!source.includes('previewTitle:') || !source.includes("section: /^AI-/i.test(item.id)")) {
+if (!source.includes('previewTitle:') || !source.includes("section: /^AI-/i.test(item.id)") || !source.includes('...lockedPreviewForFinding(item)')) {
   throw new Error('[PENTOR] Locked preview verification failed.');
 }
 

@@ -8,13 +8,14 @@ export const site = {
   phone: '+1 914-363-2825',
   legalEmail: 'legal@pentor.net',
   securityEmail: 'security@pentor.net',
-  tagline: 'We think like attackers, so you can stay protected.',
+  tagline: 'Security testing built for AI-powered and AI-generated applications.',
   email: 'support@pentor.net',
 } as const;
 
 export type NavItem = { label: string; to: string };
 
 export const navItems: NavItem[] = [
+  { label: 'AI Security', to: '/#ai-security' },
   { label: 'How It Works', to: '/#how-it-works' },
   { label: 'Pricing', to: '/#pricing' },
   { label: 'Human Pentest', to: '/#human-pentest' },
@@ -22,6 +23,7 @@ export const navItems: NavItem[] = [
 
 export const footerLinks = {
   product: [
+    { label: 'AI App Security', to: '/#ai-security' },
     { label: 'How It Works', to: '/#how-it-works' },
     { label: 'Pricing', to: '/#pricing' },
     { label: 'Human Pentest', to: '/#human-pentest' },
@@ -40,61 +42,61 @@ export const footerLinks = {
 } as const;
 
 export const trustIndicators = [
+  'Built for AI apps',
   'Safe, controlled checks',
-  'Clear remediation instructions',
-  'Human testing available',
-  'Built for small businesses',
+  'Actionable fix guidance',
+  'Traditional security included',
 ] as const;
 
 export const howItWorks = [
   {
     step: 1,
-    title: 'Enter your domain',
-    description: 'Tell us which website you want tested. We normalize the address and prepare a controlled public-surface assessment.',
+    title: 'Enter your application domain',
+    description: 'Submit the public domain of the AI-powered or AI-generated application you are authorized to test.',
   },
   {
     step: 2,
-    title: 'Confirm authorization',
-    description: 'Confirm that you own the domain or have explicit permission, then accept the responsible-use terms. No email verification is required for Free Scan.',
+    title: 'Pentor maps the AI attack surface',
+    description: 'Pentor examines client assets, exposed AI services, application endpoints, configuration signals, and traditional web-security controls.',
   },
   {
     step: 3,
-    title: 'Receive your security report',
-    description: 'Get a clear, prioritized report with plain-language explanations and recommended fixes you can act on right away.',
+    title: 'Receive prioritized AI security findings',
+    description: 'Get a clear report explaining exposed secrets, costly misconfigurations, AI endpoint risks, and the fixes that matter first.',
   },
 ] as const;
 
 export const whatPentorChecks = [
   {
-    title: 'Web application exposure',
-    description: 'Publicly reachable pages, endpoints, and application surfaces that could be reached by an attacker.',
+    title: 'AI secret exposure',
+    description: 'Client-side assets and public responses are reviewed for exposed LLM credentials, privileged backend keys, and sensitive configuration.',
   },
   {
-    title: 'Security headers and TLS',
-    description: 'Transport encryption and browser security headers that protect data in transit and at rest in the browser.',
+    title: 'AI endpoint exposure',
+    description: 'Public chat, generation, assistant, agent, and model-proxy endpoints are identified and assessed for unsafe exposure.',
   },
   {
-    title: 'Publicly exposed services',
-    description: 'Services and ports visible to the internet that may not need to be publicly reachable.',
+    title: 'AI cost-abuse risk',
+    description: 'Signals that could let unauthenticated or automated users consume paid model resources are highlighted.',
   },
   {
-    title: 'Known vulnerability indicators',
-    description: 'Signals tied to publicly disclosed issues in software and components your site depends on.',
+    title: 'Prompt and data leakage',
+    description: 'Controlled checks look for prompt disclosure, sensitive context exposure, and unsafe model-response behavior.',
   },
   {
-    title: 'Misconfiguration risks',
-    description: 'Common setup mistakes that accidentally expose data or weaken your defenses.',
+    title: 'Backend privilege exposure',
+    description: 'Supabase, Firebase, storage, database, and service-role configuration mistakes commonly shipped by AI coding workflows.',
   },
   {
-    title: 'Authentication and session risks',
-    description: 'How logins, sessions, and cookies are handled — and where those choices could be abused.',
+    title: 'AI stack intelligence',
+    description: 'Public signals associated with model providers, AI SDKs, vector stores, frameworks, and AI application platforms.',
   },
   {
-    title: 'Domain and DNS security signals',
-    description: 'DNS records and email-authentication signals that help prevent spoofing and impersonation.',
+    title: 'Traditional web security',
+    description: 'TLS, headers, cookies, DNS, public services, common misconfigurations, and known vulnerability indicators remain included.',
   },
   {
-    title: 'Actionable remediation priorities',
-    description: 'Every finding is ranked by risk so you know what to fix first, with clear recommended actions.',
+    title: 'Prioritized remediation',
+    description: 'Findings are ranked by real business impact, with clear instructions for developers and non-security founders.',
   },
 ] as const;

@@ -1,7 +1,7 @@
 export type BillingType = 'one-time' | 'monthly' | 'free';
 
 export interface PricingPlan {
-  id: 'free' | 'pro' | 'domain-credit' | 'monitoring' | 'human';
+  id: 'free' | 'limited' | 'advanced' | 'monitoring' | 'human';
   name: string;
   price: number;
   priceLabel: string;
@@ -13,112 +13,103 @@ export interface PricingPlan {
   ctaTo: string;
   popular?: boolean;
   badge?: string;
-  domainCredits?: number;
 }
 
 export const pricingPlans: PricingPlan[] = [
   {
     id: 'free',
-    name: 'Free Scan',
+    name: 'Free AI Scan',
     price: 0,
     priceLabel: '$0',
     billing: 'free',
     billingNote: 'No credit card required',
-    description: 'Run the same fast standard checks as Pro and preview the most important findings.',
+    description: 'A fast AI application security snapshot with visible risk signals.',
     features: [
-      'Pro-standard network & app checks',
-      'Pro-standard database checks',
-      'Passed checks fully visible',
-      'Top security findings preview',
-      'Additional findings blurred',
-      'Email authorization',
+      'AI application surface snapshot',
+      'Traditional security baseline',
+      'Passed checks visible',
+      'Selected findings revealed',
       'No credit card required',
     ],
-    cta: 'Start Free',
+    cta: 'Scan AI App Free',
     ctaTo: '/',
   },
   {
-    id: 'pro',
-    name: 'Pro Scan',
-    price: 19.90,
-    priceLabel: '$19.90',
+    id: 'limited',
+    name: 'Pro AI Scan',
+    price: 9.99,
+    priceLabel: '$9.99',
     billing: 'one-time',
-    billingNote: 'One-time payment · includes 3 domain credits',
-    description: 'One professional assessment with flexible depth and no confusing tiers.',
+    billingNote: 'One-time payment',
+    description: 'Unlock the complete automated AI and web-security report.',
     features: [
-      '3 verified domain credits',
-      'Network & application security',
-      'SQL, NoSQL & database exposure checks',
-      'Optional Deep Vulnerability Scan',
-      'Step-by-step remediation guidance',
-      'Professional PDF report',
-      'Additional domains only $5 each',
+      'Full AI security findings',
+      'Exposed secret analysis',
+      'AI endpoint risk signals',
+      'Prioritized fix guidance',
+      'Downloadable report',
     ],
-    cta: 'Get Pro — 3 Domains',
-    ctaTo: '/checkout/pro',
+    cta: 'Run Pro AI Scan',
+    ctaTo: '/checkout/limited',
+  },
+  {
+    id: 'advanced',
+    name: 'Deep AI Assessment',
+    price: 29.99,
+    priceLabel: '$29.99',
+    billing: 'one-time',
+    billingNote: 'One-time payment',
+    description: 'Deeper automated analysis across the AI and traditional attack surface.',
+    features: [
+      'Everything in Pro AI Scan',
+      'Deep application assessment',
+      'Broader endpoint and exposure checks',
+      'Advanced risk correlation',
+      'Professional remediation report',
+    ],
+    cta: 'Run Deep Assessment',
+    ctaTo: '/checkout/advanced',
     popular: true,
-    badge: 'Best Value',
-    domainCredits: 3,
+    badge: 'Most Popular',
   },
   {
     id: 'monitoring',
-    name: 'Continuous Monitoring',
+    name: 'AI Security Monitoring',
     price: 9.99,
     priceLabel: '$9.99',
     billing: 'monthly',
     billingNote: '$9.99/month — cancel anytime',
-    description: 'Scheduled recurring checks with new-risk alerts.',
+    description: 'Recurring checks for new AI exposure and web-security regressions.',
     features: [
-      'Scheduled recurring checks',
-      'Change detection',
+      'Scheduled AI app scans',
+      'Deployment change detection',
       'New-risk notifications',
       'Security history',
       'Cancel anytime',
     ],
-    cta: 'Start Monitoring',
+    cta: 'Start AI Monitoring',
     ctaTo: '/checkout/monitoring',
   },
   {
     id: 'human',
-    name: 'Human Pentest',
+    name: 'Human AI Pentest',
     price: 399,
     priceLabel: '$399',
     billing: 'one-time',
     billingNote: 'One-time — scheduled after scope review',
-    description: 'A manual white-hat assessment by a vetted specialist.',
+    description: 'A manual AI application assessment by a vetted white-hat specialist.',
     features: [
-      'Manual white-hat assessment',
+      'Manual AI attack-path assessment',
       'Validated vulnerabilities',
-      'Attack-path analysis',
+      'Prompt, endpoint and backend review',
       'Detailed fix instructions',
       'Professional report',
     ],
-    cta: 'Request Human Test',
+    cta: 'Request Human Pentest',
     ctaTo: '/human-pentest',
   },
 ];
 
-export const domainCreditPlan: PricingPlan = {
-  id: 'domain-credit',
-  name: 'Additional Domain Credit',
-  price: 5,
-  priceLabel: '$5',
-  billing: 'one-time',
-  billingNote: 'One-time payment · never expires until used',
-  description: 'Add another verified domain to your Pro security workspace.',
-  features: [
-    '1 additional domain credit',
-    'Network & application security',
-    'Database & injection security',
-    'Optional Deep Vulnerability Scan',
-    'Professional PDF report',
-  ],
-  cta: 'Buy Domain Credit',
-  ctaTo: '/checkout/domain-credit',
-  domainCredits: 1,
-};
-
 export function getPlan(id: string): PricingPlan | undefined {
-  if (id === 'limited' || id === 'advanced') return pricingPlans.find((plan) => plan.id === 'pro');
-  return id === 'domain-credit' ? domainCreditPlan : pricingPlans.find((plan) => plan.id === id);
+  return pricingPlans.find((p) => p.id === id);
 }
